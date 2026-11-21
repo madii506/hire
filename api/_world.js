@@ -308,13 +308,19 @@ async function state() {
       (SELECT count(DISTINCT wallet) FROM hire_claims WHERE status = 'paid')::int AS humans,
       (SELECT count(*) FROM hire_jobs)::int AS jobs,
       (SELECT count(*) FROM hire_log)::int AS lines,
+      (SELECT count(*) FROM hire_claims)::int AS hired,
+      (SELECT count(*) FROM hire_claims WHERE proof_at IS NOT NULL)::int AS sent,
+      (SELECT count(*) FROM hire_claims WHERE pass)::int AS approved,
+      (SELECT count(*) FROM hire_claims WHERE status = 'rejected')::int AS rejected,
+      (SELECT max(paid_at) FROM hire_claims WHERE status = 'paid') AS last_paid,
       (SELECT count(*) FROM hire_here WHERE at > now() - interval '2 minutes')::int AS watching`),
   ]);
   const tickAt = +(await L.meta('tick_at') || 0);
   return {
     now: new Date().toISOString(), mock: C.MOCK || undefined, paused: CFG.paused || undefined, tickAt: tickAt || null, usd: usd || null,
     wallet: { address: addr, lamports: B.balance, funded: B.funded, day: B.day, spent: B.spent, owed: B.owed, left: B.left },
-    stats: { open: st.open, review: st.review, working: st.working, paid: st.paid, paidLamports: +st.paid_lamports, humans: st.humans, jobs: st.jobs, lines: st.lines, watching: st.watching },
+    stats: { open: st.open, review: st.review, working: st.working, paid: st.paid, paidLamports: +st.paid_lamports, humans: st.humans, jobs: st.jobs, lines: st.lines, watching: st.watching,
+      hired: st.hired, sent: st.sent, approved: st.approved, rejected: st.rejected, lastPaid: st.last_paid || null },
     rules: { minBounty: CFG.minBounty, maxBounty: CFG.maxBounty, dayPct: CFG.dayPct, dayMax: CFG.dayMax, reserve: CFG.reserve, maxOpen: CFG.maxOpen,
       jobEveryMin: CFG.jobEveryMin, perWalletDay: CFG.perWalletDay, perIpDay: CFG.perIpDay, claimMin: CFG.claimMin, tries: CFG.tries, passAt: CFG.passAt, text: AI.TEXT, vision: AI.VISION },
     world: Object.fromEntries(world.map(w => [w.agent, w.room])),
