@@ -1,6 +1,6 @@
 // HIRE · shared pieces: the API, formatting, the wallet picker, toasts, and the rows every screen prints.
-import { BY, label } from './agents.js?v=4';
-import * as W from './wallet.js?v=4';
+import { BY, label } from './agents.js?v=5';
+import * as W from './wallet.js?v=5';
 
 // set these once the coin is live (left empty, nothing about a token is shown anywhere)
 export const CONFIG = { ca: '', x: '' };
@@ -36,6 +36,19 @@ export const isMock = sig => !sig || /^mock/.test(sig);
 export const txUrl = sig => `https://solscan.io/tx/${sig}`;
 export const acctUrl = a => `https://solscan.io/account/${a}`;
 export const txLink = (sig, text = 'tx') => isMock(sig) ? `<span class="faint" title="local test: no real transaction">test-tx</span>` : `<a class="ext" href="${txUrl(sig)}" target="_blank" rel="noopener">${text}</a>`;
+// the rate card: read once per visit (the server holds it; the edge caches it)
+let catP = null;
+export const catalog = () => catP || (catP = api('catalog').catch(e => { catP = null; throw e; }));
+export const KIND = { post: 'screenshot of your post', screen: 'photo of a screen', photo: 'photo' };
+export const KINDL = { post: 'a screenshot of your public post, with your code typed in it', screen: 'a camera photo of the screen, with your code handwritten on paper beside it', photo: 'a camera photo, with your code handwritten on paper in the frame' };
+const SIG = /^[1-9A-HJ-NP-Za-km-z]{64,90}$/;
+// a signature or a long link is shortened (and a link someone typed is never made clickable)
+export function showVal(v) {
+  const s = String(v == null ? '' : v); if (SIG.test(s)) return s.slice(0, 6) + '…' + s.slice(-6);
+  const m = /^https?:\/\/(?:www\.)?([^/?#]+)([^?#]*)/.exec(s); if (!m) return s;
+  const p = m[2].replace(/\/+$/, ''); return m[1] + (p.length > 28 ? p.slice(0, 13) + '…' + p.slice(-10) : p);
+}
+export const valHtml = v => SIG.test(String(v || '')) ? txLink(v, esc(showVal(v))) : esc(showVal(v));
 export const acctLink = (a, text) => `<a class="ext" href="${acctUrl(a)}" target="_blank" rel="noopener">${esc(text || short(a))}</a>`;
 
 // ---- the API
@@ -112,7 +125,12 @@ export function jobRow(j, px) {
   return `<tr class="go" data-href="/job/${esc(j.id)}"><td class="dim">#${esc(j.no)}</td><td class="w"><b>${esc(j.title)}</b><span class="s">${esc(j.ask ? 'report: ' + j.ask : j.brief)}</span></td>
     <td class="hm nowrap">${label(j.agent)}<span class="s">${esc(j.agent)}</span></td><td class="n"><b class="amb">${sol(j.bounty)}</b> SOL<span class="s">${usd(j.bounty, px) || '&nbsp;'}</span></td>
     <td class="hm">${slots(j)}<span class="s">${open ? (left > 0 ? left + ' free' : 'full') : j.done + ' paid'}</span></td>
-    <td class="n">${open ? `<span data-until="${esc(j.expires)}">${until(j.expires)}</span>` : `<span class="tag o">${esc(j.status)}</span>`}</td></tr>`;
+    <td class="n">${open ? `<span data-until="${esc(j.expires)}">${until(j.expires)}</span>${tlBar(j)}` : `<span class="tag o">${esc(j.status)}</span>`}</td></tr>`;
+}
+// how much of a task's open window is left, as a bar that shrinks every second (the clock keeps it moving)
+export function tlBar(j) {
+  const a = +new Date(j.at), b = +new Date(j.expires), f = Math.max(0, Math.min(1, (b - Date.now()) / Math.max(1, b - a)));
+  return `<span class="tl${f < .15 ? ' low' : ''}" data-from="${esc(j.at)}" data-to="${esc(j.expires)}"><i style="width:${(f * 100).toFixed(1)}%"></i></span>`;
 }
 const KT = { posts: ['POST', ''], hires: ['TAKE', 'x'], pays: ['PAID', 'amb'], boot: ['SYS', 'o'], thinks: ['NOTE', 'o'] };
 export function logLine(l, typing = false) {
@@ -129,16 +147,16 @@ export const lineTail = l => (l.sig ? `<span class="lk">${txLink(l.sig)}</span>`
 export function proofCard(p) {
   const val = p.answer || p.seen;
   return `<figure class="pf"><a class="img" href="/job/${esc(p.job || '')}"><img loading="lazy" src="/api/photo?c=${encodeURIComponent(p.claim)}" alt="Proof photo for task ${esc(p.no || '')}: ${esc(p.title)}"><span class="no">#${esc(p.no || '----')} · ${label(p.agent)}</span></a>
-    <figcaption><span class="dim">${esc(p.ask || p.title)}</span>${val ? `<span class="val">${esc(val)}</span>` : ''}<span class="vd">${p.place ? esc(p.place) + ' · ' : ''}${ago(p.at)} · <span class="amb">+${sol(p.lamports)} SOL</span></span></figcaption></figure>`;
+    <figcaption><span class="dim">${esc(p.ask || p.title)}</span>${val ? `<span class="val">${esc(showVal(val))}</span>` : ''}<span class="vd">${p.place ? esc(p.place) + ' · ' : ''}${ago(p.at)} · <span class="amb">+${sol(p.lamports)} SOL</span></span></figcaption></figure>`;
 }
 export const ghostProofs = n => Array.from({ length: n }, (_, i) => `<figure class="pf ghost"><div class="img">${i ? '' : 'awaiting first proof'}</div><figcaption><span>#---- · AGT-??</span><span>&nbsp;</span></figcaption></figure>`).join('');
 export function payRow(p) {
   return `<tr><td class="dim nowrap">${ago(p.at)}</td><td class="n"><b class="amb">+${sol(p.lamports)}</b> SOL</td><td class="nowrap">${acctLink(p.wallet)}</td>
-    <td class="w hm">${p.job ? `<a href="/job/${esc(p.job)}">#${esc(p.no || '')} ${esc(p.title)}</a>` : esc(p.title)}${p.answer ? `<span class="s">reported: ${esc(p.answer)}${p.place ? ' · ' + esc(p.place) : ''}</span>` : ''}</td>
+    <td class="w hm">${p.job ? `<a href="/job/${esc(p.job)}">#${esc(p.no || '')} ${esc(p.title)}</a>` : esc(p.title)}${p.answer ? `<span class="s">reported: ${esc(showVal(p.answer))}${p.place ? ' · ' + esc(p.place) : ''}</span>` : ''}</td>
     <td class="hm nowrap">${label(p.agent)}</td><td class="n">${txLink(p.sig)}</td></tr>`;
 }
 export function dataRow(d) {
   return `<tr class="go" data-href="/job/${esc(d.job)}"><td class="dim">#${esc(d.no)}</td><td class="w">${esc(d.ask || d.title)}<span class="s">${esc(d.title)}</span></td>
-    <td class="val"><b>${esc(d.answer || '—')}</b>${d.seen && d.seen !== d.answer ? `<span class="s">model read: ${esc(d.seen)}</span>` : d.seen ? '<span class="s amb">✓ matches photo</span>' : ''}</td>
+    <td class="val"><b>${d.answer ? valHtml(d.answer) : '—'}</b>${d.seen && d.seen !== d.answer ? `<span class="s">model read: ${esc(d.seen)}</span>` : d.seen ? '<span class="s amb">✓ matches photo</span>' : ''}</td>
     <td class="hm">${esc(d.place || '—')}</td><td class="hm nowrap">${label(d.agent)}${d.confidence != null ? `<span class="s">${(+d.confidence).toFixed(2)}</span>` : ''}</td><td class="n dim">${ago(d.at)}</td></tr>`;
 }

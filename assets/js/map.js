@@ -1,6 +1,6 @@
 // HIRE · the dot map: a land mask drawn as cells, and a pin for every verified value whose place a human typed.
 // Places are matched against a small built-in list of cities and countries; anything unknown is listed, never guessed.
-import { LAND } from './land.js?v=4';
+import { LAND } from './land.js?v=5';
 
 const C = [
   // europe
@@ -69,11 +69,16 @@ export function drawMap(canvas, pins, t = 0) {
   const cw = W / LAND.cols, ch = Math.min(H / LAND.rows, cw * 1.35), oy = (H - ch * LAND.rows) / 2, s = Math.max(1.2, Math.min(cw, ch) * .6);
   g.fillStyle = '#46453f';
   for (let r = 0; r < LAND.rows; r++) for (let c = 0; c < LAND.cols; c++) if (B[r][c] === '1') g.fillRect(c * cw + (cw - s) / 2, oy + r * ch + (ch - s) / 2, s, s);
+  // the sweep: a scan line crosses the map every 7 s and lights the land and every pin it passes
+  const sx = ((t % 7000) / 7000) * (W + 40) - 20;
+  for (let k = 0; k < 4; k++) { g.fillStyle = `rgba(255,176,0,${(.16 - k * .035).toFixed(3)})`; g.fillRect(sx - k * 6, oy, 2, ch * LAND.rows); }
   const out = [];
   pins.forEach((p, i) => {
     const x = (p.lon + 180) / 360 * W, y = oy + (LAND.lat0 - p.lat) / (LAND.lat0 - LAND.lat1) * ch * LAND.rows;
     if (y < oy - 4 || y > oy + ch * LAND.rows + 4) return;
-    const z = Math.max(3, s * 2.1);
+    const lit = Math.abs(x - sx) < 14;
+    const z = Math.max(3, s * 2.1) * (lit ? 1.7 : 1);
+    if (lit) { g.strokeStyle = 'rgba(255,176,0,.55)'; g.lineWidth = 1; g.strokeRect(x - z, y - z, z * 2, z * 2); }
     if (i === 0) { const k = (t % 1600) / 1600, rr = z + k * z * 3.2; g.strokeStyle = `rgba(255,176,0,${(1 - k) * .7})`; g.lineWidth = 1; g.strokeRect(x - rr / 2, y - rr / 2, rr, rr); }
     g.fillStyle = i === 0 ? '#ffb000' : 'rgba(255,176,0,.75)'; g.fillRect(x - z / 2, y - z / 2, z, z);
     out.push({ x, y, p });

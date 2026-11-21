@@ -1,73 +1,37 @@
-// HIRE · the terminal: the intro, the boot, one shared poll of the state, the router, the windows (tabs), the panes and
+// HIRE · the terminal: the intro, one shared poll of the state, the router, the windows (tabs), the panes and
 // the keys that move between them, the command line (with completion and scrollback), the status line and the clocks.
-import * as W from './wallet.js?v=4';
-import { AG, label, find } from './agents.js?v=4';
-import { $, $$, api, post, short, sol, until, ago, copy, ensureWallet, esc, toast, modal } from './ui.js?v=4';
-import * as P from './pages.js?v=4';
+import * as W from './wallet.js?v=5';
+import { AG, label, find } from './agents.js?v=5';
+import { $, $$, api, post, short, sol, until, ago, copy, ensureWallet, esc, toast, modal } from './ui.js?v=5';
+import * as P from './pages.js?v=5';
 
 const main = $('#main');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ---- the intro: a walk into HIRE HQ, once per visit, on the home page. click or any key skips it
-let introDone = Promise.resolve();
+let introDone = Promise.resolve(), introPlayed = false;
 (() => {
   const intro = document.getElementById('intro'); if (!intro) return;
   let seen = false; try { seen = sessionStorage.getItem('hire:intro') === '1'; } catch {}
   const gl = (() => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; } })();
   if (seen || location.pathname !== '/' || !gl || reduced) { intro.remove(); return; }
   try { sessionStorage.setItem('hire:intro', '1'); } catch {}
-  document.body.classList.add('intro-on');
+  document.body.classList.add('intro-on'); introPlayed = true;
   let started = false, resolve;
   introDone = new Promise(r => { resolve = r; });
   const end = () => { document.body.classList.remove('intro-on'); resolve(); if (intro.isConnected) { intro.classList.add('skip'); setTimeout(() => intro.remove(), 320); } };
   const giveUp = setTimeout(() => { if (!started) end(); }, 7000);          // slow connection: straight to the terminal
   intro.addEventListener('click', () => { if (!started) { clearTimeout(giveUp); end(); } });
-  import('./intro3d.js?v=4').then(m => { if (!intro.isConnected) return; started = true; clearTimeout(giveUp); m.play(intro, () => { document.body.classList.remove('intro-on'); resolve(); }); })
+  import('./intro3d.js?v=5').then(m => { if (!intro.isConnected) return; started = true; clearTimeout(giveUp); m.play(intro, () => { document.body.classList.remove('intro-on'); resolve(); }); })
     .catch(() => { clearTimeout(giveUp); end(); });
 })();
 
 let S = null, view = null, pollT = 0;
 const ctx = { S: () => S, go, grep: '' };
-let firstState = null; const gotState = new Promise(r => { firstState = r; });
-
-// ---- the boot: once per visit, the system prints itself up with real values, then the terminal draws in
-(() => {
-  let seen = false; try { seen = sessionStorage.getItem('hire:boot') === '1'; } catch {}
-  if (seen || reduced) return;
-  try { sessionStorage.setItem('hire:boot', '1'); } catch {}
-  const b = document.createElement('div'); b.className = 'boot'; b.setAttribute('aria-hidden', 'true'); b.innerHTML = '<pre></pre>';
-  document.body.appendChild(b);
-  const pre = $('pre', b); let done = false;
-  const finish = () => { if (done) return; done = true; b.classList.add('out'); setTimeout(() => b.remove(), 340); };
-  b.addEventListener('click', finish); addEventListener('keydown', finish, { once: true });
-  (async () => {
-    await introDone;
-    const s = await Promise.race([gotState, new Promise(r => setTimeout(() => r(null), 900))]);
-    const t0 = performance.now(), ts = () => `<span class="t">[${((performance.now() - t0) / 1000).toFixed(3).padStart(8)}]</span>`;
-    const w = s && s.wallet, st = s && s.stats, R = s && s.rules;
-    const L = [
-      `<b>hire-os</b> · a live job terminal · solana mainnet`, '',
-      () => `${ts()} loading modules: clock review payout presence`,
-      () => `${ts()} public wallet ........ ${w ? esc(short(w.address)) + '  <span class="a">' + sol(w.lamports, 4) + ' SOL</span>' : 'reading…'}`,
-      () => `${ts()} budget ............... ${w ? sol(w.left, 4) + ' SOL left today · ' + (w.funded ? 'funded' : 'waiting for funds') : '…'}`,
-      () => `${ts()} rules ................ ${R ? `${R.minBounty}–${R.maxBounty} SOL a task · ${Math.round(R.dayPct * 100)}% a day · max ${R.dayMax}` : '…'}`,
-      () => `${ts()} starting ${AG.length} agent processes`,
-      ...AG.map(a => () => `${ts()}   ${a.label} ${a.id.padEnd(9, '.')}......... <span class="ok">ok</span>`),
-      () => `${ts()} models ............... ${R ? esc(R.text) + ' · ' + esc(R.vision) : '…'}`,
-      () => `${ts()} tasks open ........... ${st ? st.open : '…'}`,
-      () => `${ts()} values verified ...... ${st ? st.values : '…'}`,
-      () => `${ts()} observers ............ ${st ? Math.max(1, st.watching) : '…'}`,
-      () => `${ts()} mounting /tasks /data /proofs /wallet /agents /humans`, '',
-      `ready. type <span class="a">help</span>, or press <span class="a">?</span> for keys.`,
-    ];
-    let i = 0;
-    const step = () => { if (done) return; const l = L[i]; pre.innerHTML += (i ? '\n' : '') + (typeof l === 'function' ? l() : l); i++; if (i < L.length) setTimeout(step, i < 3 ? 80 : 34); else setTimeout(finish, 560); };
-    step();
-  })();
-})();
+let firstState = () => {};
 
 // ---- windows
-const TABS = [['/', 'hq'], ['/jobs', 'tasks'], ['/data', 'data'], ['/proofs', 'proofs'], ['/wallet', 'wallet'], ['/agents', 'agents'], ['/humans', 'humans'], ['/docs', 'man']];
+const TABS = [['/', 'hq'], ['/jobs', 'tasks'], ['/data', 'data'], ['/proofs', 'proofs'], ['/wallet', 'wallet'], ['/agents', 'agents'], ['/humans', 'humans'], ['/docs', 'docs']];
 $('#tabs').innerHTML = TABS.map(([h, t], i) => `<a href="${h}"><i>${i + 1}</i>${t}</a>`).join('');
 const ROUTES = [
   [/^\/$/, P.home, 'HIRE', '~'],
@@ -79,10 +43,17 @@ const ROUTES = [
   [/^\/agents\/?$/, P.agentsPage, 'agents · HIRE', '~/agents'],
   [/^\/agent\/([\w-]+)\/?$/, P.agentPage, 'agents · HIRE', '~/agents'],
   [/^\/humans\/?$/, P.humansPage, 'humans · HIRE', '~/humans'],
-  [/^\/(?:docs|rules)\/?$/, P.docsPage, 'man hire · HIRE', '~/man'],
+  [/^\/(?:docs|rules)\/?$/, P.docsPage, 'docs · HIRE', '~/docs'],
   [/^\/me\/?$/, P.mePage, 'me · HIRE', '~/me'],
 ];
-let cwd = '~';
+let cwd = '~', enterT = 0;
+function drawIn() {                                            // the panes draw in, one after another
+  const tui = main.querySelector('.tui'); if (!tui || reduced || document.body.classList.contains('intro-on')) return;
+  const k = [...tui.children]; k.forEach((c, i) => c.style.setProperty('--i', i));
+  tui.classList.remove('enter'); void tui.offsetWidth; tui.classList.add('enter');
+  clearTimeout(enterT); enterT = setTimeout(() => tui.classList.remove('enter'), 420 + k.length * 55);
+}
+introDone.then(() => { if (introPlayed) setTimeout(drawIn, 30); });                  // after the walk in, you land in the terminal as it draws
 function render() {
   if (view && view.destroy) try { view.destroy(); } catch {}
   const path = location.pathname;
@@ -91,6 +62,7 @@ function render() {
   main.innerHTML = '';
   view = hit ? hit.fn(main, ctx, ...hit.args) : P.notFound(main);
   document.title = hit ? hit.title : 'HIRE';
+  drawIn();
   document.body.classList.toggle('tui-on', !!main.querySelector('.tui'));
   cwd = hit ? hit.dir : path; $('#cwd').textContent = cwd;
   const tab = path === '/' ? '/' : (TABS.find(([h]) => h !== '/' && (path === h || path.startsWith(h.replace(/s$/, '')) || (h === '/jobs' && /^\/(tasks?|job)\b/.test(path)) || (h === '/wallet' && path === '/payouts') || (h === '/docs' && path === '/rules'))) || [])[0];
@@ -183,6 +155,16 @@ setInterval(() => {
   if (S && S.usd) $('#solpx').textContent = `SOL $${(+S.usd).toFixed(2)}`;
   $$('[data-until]').forEach(el => { const v = until(el.dataset.until); if (el.textContent !== v) el.textContent = v; });
   $$('[data-tick]').forEach(el => { const s = Math.round((+el.dataset.tick - Date.now()) / 1000); el.textContent = s > 0 ? s + 's' : 'now'; });
+  const now = Date.now();
+  $$('[data-tickbar]').forEach(el => {                       // the bar under the log fills toward the next tick
+    const i = el.querySelector('.tb i'), b = el.querySelector('b'), at = S && S.tickAt; if (!i || !b) return;
+    if (!at) { b.textContent = '—'; i.style.width = '0'; return; }
+    const left = Math.max(0, at + 60000 - now), w = (1 - left / 60000) * 100;
+    if (w < (+i.dataset.w || 0) - 1) { i.style.transition = 'none'; i.style.width = w.toFixed(1) + '%'; void i.offsetWidth; i.style.transition = ''; } else i.style.width = w.toFixed(1) + '%';
+    i.dataset.w = w; b.textContent = left > 0 ? Math.ceil(left / 1000) + 's' : 'now';
+  });
+  $$('.tl[data-to]').forEach(el => { const a = +new Date(el.dataset.from), z = +new Date(el.dataset.to), f = Math.max(0, Math.min(1, (z - now) / Math.max(1, z - a))); if (el.firstElementChild) el.firstElementChild.style.width = (f * 100).toFixed(1) + '%'; el.classList.toggle('low', f < .15); });
+  $$('[data-up]').forEach(el => { if (el.dataset.up) { const v = P.upFor(el.dataset.up); if (el.textContent !== v) el.textContent = v; } });
   tmux();
 }, 1000);
 
@@ -207,13 +189,13 @@ const closeOut = () => { out.hidden = true; };
 const clearOut = () => { scroll = ''; out.hidden = true; out.innerHTML = ''; };
 out.addEventListener('click', e => { if (e.target.closest('[data-x]')) closeOut(); else if (e.target.closest('a[href^="/"]')) closeOut(); });
 const NAV = { hq: '/', home: '/', '~': '/', tasks: '/jobs', jobs: '/jobs', board: '/jobs', data: '/data', values: '/data', map: '/data', proofs: '/proofs', wall: '/proofs', wallet: '/wallet', payouts: '/wallet', ledger: '/wallet',
-  agents: '/agents', ps: '/agents', top: '/agents', humans: '/humans', who: '/humans', docs: '/docs', man: '/docs', rules: '/rules', me: '/me', log: '/', tail: '/', protocol: '/docs#protocol' };
+  agents: '/agents', ps: '/agents', top: '/agents', humans: '/humans', who: '/humans', docs: '/docs', man: '/docs', rules: '/rules', rates: '/jobs#rates', card: '/jobs#rates', pay: '/jobs#rates', me: '/me', log: '/', tail: '/', protocol: '/docs#protocol' };
 const HELP = [['help', 'this list'], ['hq', 'everything on one screen'], ['tasks', 'the task board'], ['task <no>', 'open a task by number: task 7'], ['data · map', 'verified values and where they came from'], ['proofs', 'approved photos'],
   ['wallet', 'the public wallet and every payout'], ['agents · top', 'the ten processes'], ['agent <id|no>', 'one process: agent prices, agent 2'], ['humans', 'every wallet paid'],
-  ['man [topic]', 'the manual: man protocol, man rules, man sign'], ['grep <text>', 'filter the hq log (grep alone clears it)'], ['status', 'system status'], ['whoami', 'your wallet'],
+  ['docs · man [topic]', 'the manual: man jobs, man protocol, man rules'], ['rates', 'the rate card: every job and what it pays'], ['grep <text>', 'filter the hq log (grep alone clears it)'], ['status', 'system status'], ['whoami', 'your wallet'],
   ['connect · disconnect', 'your wallet'], ['me', 'your tasks and your code'], ['sim', 'simulate a payout on mainnet. nothing is sent'], ['history', 'what you typed'], ['clear', 'clear this output']];
-const TOPICS = ['what', 'protocol', 'procs', 'wallet', 'budget', 'limits', 'photo', 'minds', 'sign', 'payout', 'rules', 'api', 'test'];
-const SUGG = [...new Set(['help', 'hq', 'tasks', 'task ', 'data', 'map', 'proofs', 'wallet', 'agents', 'top', 'agent ', 'humans', 'man', 'grep ', 'status', 'whoami', 'connect', 'disconnect', 'me', 'sim', 'history', 'clear', 'cd ', 'date',
+const TOPICS = ['what', 'protocol', 'jobs', 'procs', 'proof', 'wallet', 'budget', 'limits', 'minds', 'sign', 'payout', 'rules', 'api', 'test'];
+const SUGG = [...new Set(['help', 'hq', 'tasks', 'task ', 'rates', 'data', 'map', 'proofs', 'wallet', 'agents', 'top', 'agent ', 'humans', 'docs', 'man', 'grep ', 'status', 'whoami', 'connect', 'disconnect', 'me', 'sim', 'history', 'clear', 'cd ', 'date',
   ...AG.map(a => 'agent ' + a.id), ...TOPICS.map(t => 'man ' + t)])];
 const suggest = v => { if (!v) return ''; const l = v.toLowerCase(); const m = SUGG.find(x => x.startsWith(l) && x !== l); return m ? v + m.slice(v.length) : ''; };
 const paint = () => { const v = cmd.value, s = suggest(v); ghost.innerHTML = s ? `<i>${esc(v)}</i>${esc(s.slice(v.length))}` : ''; };
@@ -248,7 +230,7 @@ async function run(raw) {
     const a = find(args[0]); if (!a) return say('usage: agent &lt;id|no&gt;\n\n' + AG.map(x => `${x.label}  ${x.id.padEnd(9)}<span class="dim">${esc(x.desc)}</span>`).join('\n'));
     closeOut(); return go('/agent/' + a.id);
   }
-  if (c === 'man' && args[0]) { const t = args[0].toLowerCase(); if (!TOPICS.includes(t)) return say(`no manual entry for ${esc(t)}. topics: ${TOPICS.join(' ')}`); closeOut(); return go('/docs#' + t); }
+  if ((c === 'man' || c === 'docs') && args[0]) { let t = args[0].toLowerCase(); if (t === 'photo') t = 'proof'; if (t === 'rates' || t === 'job') t = 'jobs'; if (!TOPICS.includes(t)) return say(`no manual entry for ${esc(t)}. topics: ${TOPICS.join(' ')}`); closeOut(); return go('/docs#' + t); }
   if (c === 'grep') {
     ctx.grep = args.join(' ').toLowerCase().slice(0, 40); if (location.pathname !== '/') go('/');
     document.dispatchEvent(new CustomEvent('hire:grep')); tmux();
@@ -281,7 +263,7 @@ cmd.addEventListener('keydown', e => {
 document.addEventListener('keydown', e => {
   const t = e.target, typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
   if (e.key === 'Escape') { if (!out.hidden) closeOut(); focusPane(null); return; }
-  if (typing || e.metaKey || e.ctrlKey || e.altKey || document.querySelector('.modal') || document.querySelector('.boot') || document.body.classList.contains('intro-on')) return;
+  if (typing || e.metaKey || e.ctrlKey || e.altKey || document.querySelector('.modal') || document.body.classList.contains('intro-on')) return;
   if (e.key === '/' || e.key === ':') { e.preventDefault(); cmd.focus(); return; }
   if (e.key === '?') { e.preventDefault(); helpKeys(); return; }
   if (e.key === 'Tab') { const ps = $$('.tui [data-pane]'); if (!ps.length) return; e.preventDefault(); const i = ps.indexOf(focused); focusPane(ps[(i + (e.shiftKey ? -1 : 1) + ps.length) % ps.length]); focused.scrollIntoView({ block: 'nearest' }); return; }
