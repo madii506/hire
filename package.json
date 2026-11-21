@@ -1,0 +1,11 @@
+{
+  "name": "hire",
+  "private": true,
+  "engines": { "node": "22.x" },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0",
+    "@solana/web3.js": "1.99.0",
+    "tweetnacl": "1.0.3"
+  },
+  "overrides": { "rpc-websockets": "9.3.3" }
+}
