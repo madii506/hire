@@ -329,6 +329,8 @@ async function state() {
       (SELECT count(*) FROM hire_claims WHERE pass)::int AS approved,
       (SELECT count(*) FROM hire_claims WHERE status = 'rejected')::int AS rejected,
       (SELECT max(paid_at) FROM hire_claims WHERE status = 'paid') AS last_paid,
+      (SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY extract(epoch FROM paid_at - proof_at)) FROM hire_claims WHERE status = 'paid' AND proof_at IS NOT NULL) AS median_pay,
+      (SELECT count(*) FROM hire_claims WHERE status = 'paid' AND answer IS NOT NULL)::int AS vals,
       (SELECT count(*) FROM hire_here WHERE at > now() - interval '2 minutes')::int AS watching`),
     L.q(`SELECT j.agent, count(DISTINCT j.id)::int AS tasks, count(c.id) FILTER (WHERE c.status = 'paid')::int AS paid,
       COALESCE(SUM(c.paid) FILTER (WHERE c.status = 'paid'), 0)::bigint AS lamports, count(c.id) FILTER (WHERE c.status = 'rejected')::int AS rejected
@@ -340,7 +342,8 @@ async function state() {
     now: new Date().toISOString(), mock: C.MOCK || undefined, paused: CFG.paused || undefined, tickAt: tickAt || null, usd: usd || null,
     wallet: { address: addr, lamports: B.balance, funded: B.funded, day: B.day, spent: B.spent, owed: B.owed, left: B.left },
     stats: { open: st.open, review: st.review, working: st.working, paid: st.paid, paidLamports: +st.paid_lamports, humans: st.humans, jobs: st.jobs, lines: st.lines, watching: st.watching,
-      hired: st.hired, sent: st.sent, approved: st.approved, rejected: st.rejected, lastPaid: st.last_paid || null },
+      hired: st.hired, sent: st.sent, approved: st.approved, rejected: st.rejected, lastPaid: st.last_paid || null,
+      medianPay: st.median_pay == null ? null : Math.round(+st.median_pay), values: st.vals },
     rules: { minBounty: CFG.minBounty, maxBounty: CFG.maxBounty, dayPct: CFG.dayPct, dayMax: CFG.dayMax, reserve: CFG.reserve, maxOpen: CFG.maxOpen,
       jobEveryMin: CFG.jobEveryMin, perWalletDay: CFG.perWalletDay, perIpDay: CFG.perIpDay, claimMin: CFG.claimMin, tries: CFG.tries, passAt: CFG.passAt, text: AI.TEXT, vision: AI.VISION },
     world: Object.fromEntries(world.map(w => [w.agent, { state: w.room, at: w.at }])),
