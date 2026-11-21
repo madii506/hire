@@ -1,10 +1,12 @@
-// HIRE · every screen of the terminal: the dashboard, the task board, one task (and the session that takes it), the data
-// the humans verified, the proof wall, the public wallet, the ten processes, the humans, the manual, your own session.
-import { AG, BY, label, find } from './agents.js?v=3';
-import * as W from './wallet.js?v=3';
-import { prepare as preparePhoto } from './photo.js?v=3';
-import { $, $$, esc, short, sol, usd, ago, until, hms, api, post, toast, modal, ensureWallet, txLink, acctLink, acctUrl,
-  bar, meter, spark, slots, agentA, jobRow, logLine, lineText, lineTail, proofCard, ghostProofs, payRow, dataRow } from './ui.js?v=3';
+// HIRE · every window of the terminal. On a desktop each window is one screen of panes that scroll inside themselves
+// (like tmux); on a phone the panes stack. Windows: hq, tasks, one task (and the session that takes it), data, proofs,
+// wallet, agents (top), humans, man, your session.
+import { AG, BY, label, find } from './agents.js?v=4';
+import * as W from './wallet.js?v=4';
+import { prepare as preparePhoto } from './photo.js?v=4';
+import { locate, drawMap } from './map.js?v=4';
+import { $, $$, esc, short, sol, usd, ago, until, hms, api, post, toast, modal, ensureWallet, txLink, acctLink,
+  bar, meter, spark, slots, agentA, jobRow, logLine, lineText, lineTail, proofCard, ghostProofs, payRow, dataRow } from './ui.js?v=4';
 
 // what your wallet signs: text only, never a transaction (the server checks the very same lines)
 const field = (s, n) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -25,13 +27,29 @@ export const RULES = [
 ];
 const R0 = { minBounty: .1, maxBounty: .5, dayPct: .1, dayMax: 5, reserve: .02, maxOpen: 8, jobEveryMin: 6, perWalletDay: 3, perIpDay: 4, claimMin: 90, tries: 2, passAt: .65, text: 'openai/gpt-4.1-mini', vision: 'google/gemini-2.5-flash' };
 const sig = v => JSON.stringify(v);
-const goRows = el => el && el.addEventListener('click', e => { const r = e.target.closest('tr[data-href]'); if (r && !e.target.closest('a,button')) document.dispatchEvent(new CustomEvent('hire:go', { detail: r.dataset.href })); });
-const crumb = (...parts) => `<div class="crumb"><a href="/">~</a>${parts.map((p, i) => ` / ${i === parts.length - 1 ? `<span class="amb">${p}</span>` : p}`).join('')}</div>`;
+const wide = () => !matchMedia('(max-width:1099px), (max-height:620px)').matches;   // the panes sit side by side
+const goTo = href => document.dispatchEvent(new CustomEvent('hire:go', { detail: href }));
+// rows: a click opens the row's page; in a list window on a wide screen it selects the row instead (Enter opens)
+function rows(el, onSel) {
+  if (!el) return;
+  el.addEventListener('click', e => {
+    const r = e.target.closest('[data-href]'); if (!r || e.target.closest('a,button,input')) return;
+    if (onSel && r.dataset.key && (wide() || r.dataset.href === '#sel')) {
+      pick(el, r); onSel(r.dataset.key);
+      if (!wide()) { const d = document.getElementById('p-det'); if (d) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    } else if (r.dataset.href !== '#sel') goTo(r.dataset.href);
+  });
+  el.addEventListener('dblclick', e => { const r = e.target.closest('[data-href]'); if (r && r.dataset.href !== '#sel' && !e.target.closest('a,button,input')) goTo(r.dataset.href); });
+  if (onSel) el.addEventListener('hire:sel', e => onSel(e.detail));
+}
+function pick(el, r) { $$('.sel', el).forEach(x => x.classList.remove('sel')); r.classList.add('sel'); }
+const P = (id, title, sub = '', right = '', body = '', cls = '') => `<section class="pane ${cls}" id="p-${id}" data-pane tabindex="-1"><div class="ph"><b>${title}</b><span class="sub">${sub}</span><span class="r">${right}</span></div><div class="pb${/flush/.test(cls) ? ' flush' : ''}" id="${id}">${body}</div></section>`;
+const head = (title, lede, right = '') => `<div class="whead"><div><h1 class="h1">${title}</h1>${lede ? `<p class="lede">${lede}</p>` : ''}</div>${right}</div>`;
 
 const LOGO = ['██╗  ██╗██╗██████╗ ███████╗', '██║  ██║██║██╔══██╗██╔════╝', '███████║██║██████╔╝█████╗  ', '██╔══██║██║██╔══██╗██╔══╝  ', '██║  ██║██║██║  ██║███████╗', '╚═╝  ╚═╝╚═╝╚═╝  ╚═╝╚══════╝'];
 function logoSvg() {
   const cw = 12, ch = 22, d = 2.7, H = (y, a, b) => `M${a} ${y}H${b}`, V = (x, a, b) => `M${x} ${a}V${b}`;
-  let path = '', rows = '';
+  let path = '', rs = '';
   LOGO.forEach((row, j) => {
     let rects = '';
     [...row].forEach((c, i) => {
@@ -44,9 +62,9 @@ function logoSvg() {
       else if (c === '╝') path += H(cy + d, x0, cx + d) + V(cx + d, y0, cy + d) + H(cy - d, x0, cx - d) + V(cx - d, y0, cy - d);
       else if (c === '╚') path += H(cy + d, cx - d, x1) + V(cx - d, y0, cy + d) + H(cy - d, cx + d, x1) + V(cx + d, y0, cy - d);
     });
-    rows += `<g class="r">${rects}</g>`;
+    rs += `<g class="r">${rects}</g>`;
   });
-  return `<svg class="logo" viewBox="-2 -2 ${27 * cw + 4} ${6 * ch + 4}" role="img" aria-label="HIRE"><path d="${path}" fill="none" stroke="#5b5a55" stroke-width="1.3"/><g fill="#ecebe5" shape-rendering="crispEdges">${rows}</g></svg>`;
+  return `<svg class="logo" viewBox="-2 -2 ${27 * cw + 4} ${6 * ch + 4}" role="img" aria-label="HIRE"><path d="${path}" fill="none" stroke="#5b5a55" stroke-width="1.3"/><g fill="#ecebe5" shape-rendering="crispEdges">${rs}</g></svg>`;
 }
 
 // the sequence diagram: four lifelines, one arrow per line
@@ -63,99 +81,90 @@ function seqLine(from, to, text) {
 }
 const SEQ = [[0, 1, 'post task'], [2, 1, 'sign: take it'], [1, 2, 'code HR-4821'], [2, 1, 'photo + value'], [1, 0, 'check photo'], [0, 1, 'pass 0.91'], [1, 3, 'transfer 0.12 SOL'], [3, 2, 'lands']];
 const SEQSTEP = [0, 1, 2, 3, 4, 4, 5, 5];
-function seqHtml() {
-  const head = ' ' + 'AGT-xx'.padEnd(17) + 'HIRE'.padEnd(18) + 'YOU'.padEnd(17) + 'SOLANA';
-  return `<span class="h">${esc(head)}</span>\n${seqLine()}\n${SEQ.map(([f, t, x], i) => `<span class="st" data-s="${SEQSTEP[i]}">${esc(seqLine(f, t, x))}</span>`).join('')}${seqLine()}`;
+const seqHtml = () => `<span class="h">${esc(' ' + 'AGT-xx'.padEnd(17) + 'HIRE'.padEnd(18) + 'YOU'.padEnd(17) + 'SOLANA')}</span>\n${seqLine()}\n${SEQ.map(([f, t, x], i) => `<span class="st" data-s="${SEQSTEP[i]}">${esc(seqLine(f, t, x))}</span>`).join('')}${seqLine()}`;
+const STEPS = r => [`<b>A process posts a task.</b> What to do, what the photo must show, the one value to report, the bounty and the spots.`, `<b>You take it.</b> Your wallet signs one line of text. No transaction, no fee, no SOL needed.`,
+  `<b>You get a code</b> like HR-4821 and ${r.claimMin} minutes. Write the code on paper, by hand.`, `<b>You do it.</b> One photo with the paper in the shot, and the value you saw. Your wallet signs once more.`,
+  `<b>The process checks it.</b> A vision model reads your code and the value off the photo. It needs ${r.passAt} confidence.`, `<b>It pays.</b> The public wallet sends the bounty on Solana mainnet, right away. The transaction is public.`];
+
+// the map pane: the land, and a pin for every verified value with a place we know
+function mapPane() { return `<div class="mapw"><canvas aria-label="world map of verified values"></canvas><div class="cap"><span class="mapn">—</span><span>▪ land · <span class="amb">■</span> a verified value</span></div><div class="tip" hidden></div></div>`; }
+function mapCtl(box) {
+  const cv = $('canvas', box), tip = $('.tip', box), cap = $('.mapn', box);
+  let pins = [], hits = [], raf = 0, alive = true, last = 0;
+  const loop = t => { if (!alive) return; raf = requestAnimationFrame(loop); if (t - last < 110 || document.hidden) return; last = t; hits = drawMap(cv, pins, t); };
+  raf = requestAnimationFrame(loop);
+  cv.addEventListener('mousemove', e => {
+    const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    const h = hits.find(k => Math.abs(k.x - x) < 9 && Math.abs(k.y - y) < 9);
+    if (!h) { tip.hidden = true; return; }
+    tip.hidden = false; tip.style.left = (h.x + 10) + 'px'; tip.style.top = (h.y + 8) + 'px';
+    tip.innerHTML = `#${esc(h.p.d.no)} ${esc(h.p.d.answer || '')} · ${esc(h.p.d.place)}`;
+  });
+  cv.addEventListener('mouseleave', () => { tip.hidden = true; });
+  return {
+    set(data) {
+      const placed = [], loose = [];
+      for (const d of data) { const ll = d.place ? locate(d.place) : null; if (ll) placed.push({ lat: ll[0], lon: ll[1], d }); else if (d.place) loose.push(d.place); }
+      pins = placed;
+      cap.textContent = data.length ? `${placed.length} placed${loose.length ? ` · ${loose.length} unplaced` : ''} · ${data.length} value${data.length === 1 ? '' : 's'}` : 'no verified values yet';
+    },
+    stop() { alive = false; cancelAnimationFrame(raf); },
+  };
 }
 
-// ------------------------------------------------------------------ home: the dashboard
+// ------------------------------------------------------------------ hq: everything on one screen
 export function home(main, ctx) {
-  const S0 = ctx.S(), r = S0 ? S0.rules : R0;
-  main.innerHTML = `<div class="wrap">
-    <section class="hero" aria-label="HIRE">
-      <div>${logoSvg()}
-        <p class="tagline" id="tagline" aria-label="AI agents post real-world tasks. Humans do them. One photo is the proof. Paid in SOL from one public wallet."></p>
-        <div class="btns"><a class="btn amb" href="/jobs">open tasks</a><a class="btn" href="#protocol">how it works</a><a class="btn" href="/docs">man hire</a></div></div>
-      <div class="sys" id="sys"></div>
-    </section></div>
+  main.innerHTML = `<div class="tui w-hq">
+    <section class="hqtop" aria-label="HIRE">
+      <div>${logoSvg()}</div>
+      <div><p class="tagline" id="tagline" aria-label="AI agents post real-world tasks. Humans do them. One photo is the proof. Paid in SOL from one public wallet."></p>
+        <div class="btns"><a class="btn amb" href="/jobs">open tasks</a><a class="btn" href="/docs#protocol">how it works</a></div></div>
+      <div class="hqstat">
+        <div class="bal"><span class="dim">public wallet · SOL</span><span class="big amb" id="k-bal">—</span><span class="dim" id="k-usd">&nbsp;</span></div>
+        <div class="actg"><div class="bars" id="k-act"></div><div class="lab"><span>activity · lines per minute · 30 min</span><span id="k-actn"></span></div></div>
+        <dl class="kv"><dt>status</dt><dd id="k-status">—</dd><dt>procs</dt><dd id="k-proc">—</dd><dt>today</dt><dd id="k-day">—</dd><dt>queue</dt><dd id="k-queue">—</dd>
+          <dt>paid</dt><dd id="k-paid">—</dd><dt>observers</dt><dd id="k-obs">—</dd><dt>pay time</dt><dd id="k-pt">—</dd><dt>next tick</dt><dd id="k-tick">—</dd></dl>
+      </div>
+    </section>
     <div class="tape" aria-hidden="true"><div class="tr" id="tape"></div></div>
-    <div class="wrap">
-    <section class="sec" id="live">
-      <div class="sh"><span class="n">01</span><b>live</b><i></i><em id="liveinfo">connecting…</em></div>
-      <div class="g2">
-        <div class="pane" style="min-height:440px"><div class="ph"><b>tasks</b><span>ls /tasks --open</span><span class="r"><span id="bn"></span><a href="/jobs">all →</a></span></div><div class="pb scroll" style="padding:0" id="board"></div></div>
-        <div class="pane logp" style="height:440px"><div class="ph"><b>log</b><span>tail -f /var/log/hire</span><span class="r" id="logn"></span></div><div class="pb" id="logbox"><div class="log" id="log"></div><div class="tailhint"><span class="cur"></span></div></div></div>
-      </div>
-      <div class="g3">
-        <div class="pane"><div class="ph"><b>ps</b><span>agent processes</span><span class="r"><a href="/agents">ps aux →</a></span></div><div class="pb scroll" style="padding:0" id="ps"></div></div>
-        <div class="pane wal"><div class="ph"><b>wallet</b><span>public · solana mainnet</span><span class="r"><a href="/wallet">ledger →</a></span></div><div class="pb" id="wal"></div></div>
-      </div>
-      <div class="g3">
-        <div class="pane"><div class="ph"><b>data</b><span>values a human reported, checked against the photo</span><span class="r"><a href="/data">all →</a></span></div><div class="pb scroll" style="padding:0" id="data"></div></div>
-        <div class="pane"><div class="ph"><b>pipeline</b><span>every claim, by stage</span></div><div class="pb" id="pipe"></div></div>
-      </div>
-    </section>
-    <section class="sec" id="protocol">
-      <div class="sh"><span class="n">02</span><b>protocol</b><i></i><em>one task, start to finish</em></div>
-      <div class="proto"><pre class="seq" id="seq" aria-hidden="true">${seqHtml()}</pre>
-        <ol class="steps" id="steps">
-          <li><span><b>A process posts a task.</b> What to do, what the photo must show, the one value to report, the bounty and the spots.</span></li>
-          <li><span><b>You take it.</b> Your wallet signs one line of text. No transaction, no fee, no SOL needed.</span></li>
-          <li><span><b>You get a code</b> like HR-4821 and ${r.claimMin} minutes. Write the code on paper, by hand.</span></li>
-          <li><span><b>You do it.</b> One photo with the paper in the shot, and the value you saw. Your wallet signs once more.</span></li>
-          <li><span><b>The process checks it.</b> A vision model reads your code and the value off the photo. It needs ${r.passAt} confidence.</span></li>
-          <li><span><b>It pays.</b> The public wallet sends the bounty on Solana mainnet, right away. The transaction is public.</span></li>
-        </ol></div>
-    </section>
-    <section class="sec" id="proofs">
-      <div class="sh"><span class="n">03</span><b>proofs</b><i></i><em><a href="/proofs">every approved photo →</a></em></div>
-      <div class="pgrid" id="pwall">${ghostProofs(4)}</div>
-    </section>
-    <section class="sec" id="rules">
-      <div class="sh"><span class="n">04</span><b>rules</b><i></i><em>enforced by the server, not by the agents</em></div>
-      <div class="g2"><pre class="conf" id="conf"></pre><pre class="conf">${['# /etc/hire/never.conf', '# a task is refused before it is posted if it breaks one of these,', '# and a photo is turned down if it does', '', ...RULES.map(x => '- ' + x)].map(l => l.startsWith('#') ? `<span class="c">${esc(l)}</span>` : esc(l)).join('\n')}</pre></div>
-    </section>
-    <section class="sec" id="faq">
-      <div class="sh"><span class="n">05</span><b>man hire</b><i></i><em>questions</em></div>
-      <div class="man">${FAQ(r).map(([q, a], i) => `<details${i ? '' : ' open'}><summary>${esc(q)}</summary><div class="a">${a}</div></details>`).join('')}</div>
-    </section>
-    <div class="endl"><span>hire-os · ${AG.length} agent processes · every line written live by a language model</span><span id="endw"></span></div>
+    ${P('tasks', 'tasks', 'ls /tasks --open', '<span id="bn"></span><a href="/jobs">all →</a>', '', 'flush cap')}
+    ${P('log', 'log', 'tail -f /var/log/hire', '<span id="logn"></span>', '<div class="log" id="logl"></div><div class="tailhint"><span class="cur"></span></div>', 'logp cap')}
+    ${P('ps', 'top', 'agent processes', '<a href="/agents">all →</a>', '', 'flush cap')}
+    ${P('data', 'data', 'values checked against the photo', '<a href="/data">all →</a>', '', 'flush cap')}
+    ${P('map', 'map', 'where the values came from', '<a href="/data">data →</a>', mapPane(), 'flush')}
+    ${P('wal', 'wallet', 'public · solana mainnet', '<a href="/wallet">ledger →</a>', '', 'cap')}
   </div>`;
+  const map = mapCtl($('#p-map .mapw', main));
 
-  // the tagline types itself once the intro is out of the way
+  // the tagline types itself once the intro and the boot are out of the way
   const TAG = ['AI agents post real-world tasks.', 'Humans do them. One photo is the proof.', 'Paid in SOL from one public wallet.'];
   let tagT = 0;
   const typeTag = () => {
     const el = $('#tagline', main); if (!el) return;
-    if (document.body.classList.contains('intro-on')) { tagT = setTimeout(typeTag, 250); return; }
+    if (document.body.classList.contains('intro-on') || document.querySelector('.boot')) { tagT = setTimeout(typeTag, 200); return; }
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) { el.innerHTML = TAG.map(esc).join('<br>') + '<span class="cur"></span>'; return; }
     let i = 0; const all = TAG.join('\n');
-    const step = () => { i = Math.min(all.length, i + 2); el.innerHTML = esc(all.slice(0, i)).replace(/\n/g, '<br>') + '<span class="cur"></span>'; if (i < all.length) tagT = setTimeout(step, 22); };
-    tagT = setTimeout(step, 500);
+    const step = () => { i = Math.min(all.length, i + 2); el.innerHTML = esc(all.slice(0, i)).replace(/\n/g, '<br>') + '<span class="cur"></span>'; if (i < all.length) tagT = setTimeout(step, 20); };
+    tagT = setTimeout(step, 250);
   };
   typeTag();
+  const gl = setInterval(() => { if (document.hidden || document.body.classList.contains('intro-on') || matchMedia('(prefers-reduced-motion: reduce)').matches) return; const rs = $$('.logo .r', main), r = rs[(Math.random() * rs.length) | 0]; if (!r) return; r.classList.add('g'); setTimeout(() => r.classList.remove('g'), 90 + Math.random() * 90); }, 4200);
+  rows($('#tasks', main)); rows($('#ps', main)); rows($('#data', main));
 
-  // the protocol diagram walks itself
-  let stepI = 0, stepHold = 0;
-  const showStep = i => { stepI = i; $$('#seq .st', main).forEach(s => s.classList.toggle('on', +s.dataset.s === i)); $$('#steps li', main).forEach((li, k) => li.classList.toggle('on', k === i)); };
-  $$('#steps li', main).forEach((li, k) => li.addEventListener('click', () => { showStep(k); stepHold = Date.now() + 9000; }));
-  showStep(0);
-  const stepT = setInterval(() => { if (Date.now() > stepHold && !document.hidden) showStep((stepI + 1) % 6); }, 2300);
-
-  goRows($('#board', main)); goRows($('#data', main));
-
-  // the log: printed once, then new lines type themselves in
+  // the log: printed once, then new lines type themselves in (grep filters it)
   let seen = 0, queue = [], typingNow = false, first = true;
-  const logbox = $('#logbox', main), log = $('#log', main);
+  const logbox = $('#log', main), log = $('#logl', main);
+  const grepOk = l => !ctx.grep || (label(l.agent) + ' ' + l.agent + ' ' + l.kind + ' ' + (l.text || '')).toLowerCase().includes(ctx.grep);
   const nearEnd = () => logbox.scrollHeight - logbox.scrollTop - logbox.clientHeight < 60;
   const toEnd = () => { logbox.scrollTop = logbox.scrollHeight; };
   function typeNext() {
     if (typingNow || !queue.length || !log.isConnected) return;
+    const l = queue.shift(); if (!grepOk(l)) { typeNext(); return; }
     typingNow = true;
-    const l = queue.shift(), stick = nearEnd();
+    const stick = nearEnd();
     log.insertAdjacentHTML('beforeend', logLine(l, true));
     const row = log.lastElementChild, t = $('.t', row), full = lineText(l);
-    while (log.children.length > 140) log.firstElementChild.remove();
+    while (log.children.length > 160) log.firstElementChild.remove();
     if (stick) toEnd();
     const per = Math.max(1, Math.ceil(full.length / 45)); let i = 0;
     const tick = () => {
@@ -167,139 +176,124 @@ export function home(main, ctx) {
     };
     tick();
   }
+  let allLines = [];
+  const reprint = () => { log.innerHTML = allLines.filter(grepOk).slice(-60).map(l => logLine(l)).join('') || `<div class="empty">no line matches "${esc(ctx.grep)}". type grep to clear.</div>`; toEnd(); };
   function feed(S) {
     const lines = S.log.slice().reverse();
-    if (first) { first = false; log.innerHTML = lines.slice(-50).map(l => logLine(l)).join(''); seen = lines.length ? lines[lines.length - 1].id : 0; toEnd(); return; }
+    allLines = lines;
+    if (first) { first = false; reprint(); seen = lines.length ? lines[lines.length - 1].id : 0; return; }
     const fresh = lines.filter(l => l.id > seen); if (!fresh.length) return;
     seen = fresh[fresh.length - 1].id; queue.push(...fresh); typeNext();
   }
+  const onGrep = () => reprint();
+  document.addEventListener('hire:grep', onGrep);
 
   const last = {};
   const put = (id, html) => { const el = $('#' + id, main); if (!el) return; if (last[id] !== html) { last[id] = html; el.innerHTML = html; } };
-  const flashSet = (el, v) => { if (!el || el.textContent === v) return; const had = el.textContent !== ''; el.textContent = v; if (had) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } };
+  const flashSet = (id, v) => { const el = $('#' + id, main); if (!el || el.textContent === v) return; const had = el.textContent !== '—' && el.textContent !== ''; el.textContent = v; if (had) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); } };
 
   function update(S) {
-    const w = S.wallet, st = S.stats, px = S.usd, R = S.rules;
-    const active = AG.filter(a => { const l = S.log.find(x => x.agent === a.id); return l && Date.now() - new Date(l.at) < 3 * 60000; }).length;
-    // the system box
-    if (!$('#sys .kv', main)) {
-      $('#sys', main).innerHTML = `<div class="t"><span>hire-os · solana mainnet</span><span id="sessclock"></span></div>
-        <div class="actg"><div class="bars" id="k-act"></div><div class="lab"><span>activity · log lines per minute, last 30 min</span><span id="k-actn"></span></div></div>
-        <div class="big"><span id="k-bal">—</span> <span class="dim" style="font-size:.5em;font-weight:400">SOL in the public wallet</span></div>
-        <div class="dim" style="margin:4px 0 14px" id="k-usd"></div>
-        <dl class="kv"><dt>wallet</dt><dd id="k-addr"></dd><dt>processes</dt><dd><span id="k-proc"></span></dd><dt>today</dt><dd id="k-day"></dd>
-        <dt>queue</dt><dd id="k-queue"></dd><dt>paid out</dt><dd id="k-paid"></dd><dt>observers</dt><dd id="k-obs"></dd><dt>last tick</dt><dd id="k-tick"></dd><dt>status</dt><dd id="k-status"></dd></dl>`;
-    }
-    flashSet($('#k-bal', main), sol(w.lamports, 4));
-    { const now = Date.now(), b = Array(30).fill(0); S.log.forEach(l => { const k = Math.floor((now - new Date(l.at)) / 60000); if (k >= 0 && k < 30) b[29 - k]++; });
-      const mx = Math.max(3, ...b); put('k-act', b.map((v, i) => `<i style="height:${v ? Math.max(8, v / mx * 100) : 2}%" class="${i === 29 ? 'now' : ''}" title="${v} line${v === 1 ? '' : 's'}"></i>`).join(''));
+    const w = S.wallet, st = S.stats, px = S.usd, R = S.rules, now = Date.now();
+    const active = AG.filter(a => { const l = S.log.find(x => x.agent === a.id); return l && now - new Date(l.at) < 3 * 60000; }).length;
+    flashSet('k-bal', sol(w.lamports, 4));
+    put('k-usd', px ? `${usd(w.lamports, px)} · $${(+px).toFixed(2)} per SOL` : '&nbsp;');
+    { const b = Array(30).fill(0); S.log.forEach(l => { const k = Math.floor((now - new Date(l.at)) / 60000); if (k >= 0 && k < 30) b[29 - k]++; });
+      const mx = Math.max(3, ...b); put('k-act', b.map((v, i) => `<i style="height:${v ? Math.max(8, v / mx * 100) : 2}%" class="${i === 29 ? 'now' : ''}" title="${v}"></i>`).join(''));
       put('k-actn', `${b.reduce((x, y) => x + y, 0)} lines`); }
-    $('#k-usd', main).textContent = px ? `${usd(w.lamports, px)} at $${(+px).toFixed(2)} per SOL` : '';
-    put('k-addr', `${esc(short(w.address))} <span class="copy" data-copy="${esc(w.address)}">copy</span> ${acctLink(w.address, 'solscan')}`);
-    flashSet($('#k-proc', main), `${AG.length}/${AG.length} up · ${active} active`);
-    put('k-day', `${meter([[w.spent, 'on'], [w.owed, 'ow']], w.day || 1, 18)} <span class="dim">${sol(w.left, 3)} SOL left</span>`);
-    flashSet($('#k-queue', main), `${st.open} open · ${st.working} working · ${st.review} in review`);
-    flashSet($('#k-paid', main), `${sol(st.paidLamports, 3)} SOL to ${st.humans} human${st.humans === 1 ? '' : 's'}`);
-    flashSet($('#k-obs', main), `${Math.max(1, st.watching)} · you are one of them`);
-    put('k-status', w.funded ? (S.paused ? '<span class="tag x">paused</span>' : '<span class="tag amb">hiring</span> tasks go up while someone is watching')
-      : '<span class="tag x">waiting for funds</span> <span class="dim">no task can be posted until the public wallet is funded</span>');
+    put('k-status', w.funded ? (S.paused ? '<span class="tag x">paused</span>' : '<span class="tag amb">hiring</span>') : '<span class="tag x">waiting for funds</span>');
+    flashSet('k-proc', `${AG.length}/${AG.length} up · ${active} active`);
+    put('k-day', `${meter([[w.spent, 'on'], [w.owed, 'ow']], w.day || 1, 10)} <span class="dim">${sol(w.left, 2)} left</span>`);
+    flashSet('k-queue', `${st.open} open · ${st.working + st.review} working`);
+    flashSet('k-paid', `${sol(st.paidLamports, 3)} SOL · ${st.humans} human${st.humans === 1 ? '' : 's'}`);
+    flashSet('k-obs', `${Math.max(1, st.watching)} incl. you`);
+    put('k-pt', st.medianPay == null ? '<span class="dim">no payout yet</span>' : `${st.medianPay}s <span class="dim">median</span>`);
+    const nt = S.tickAt ? Math.max(0, Math.round((S.tickAt + 60000 - now) / 1000)) : null;
+    put('k-tick', nt == null ? '—' : `<span data-tick="${S.tickAt + 60000}">${nt}s</span>`);
     // the ticker
     const ev = S.log.filter(l => ['posts', 'pays', 'reviews', 'hires'].includes(l.kind)).slice(0, 14).map(l => `<span><b>${{ posts: 'POST', pays: 'PAID', reviews: /^FAIL/.test(l.text) ? 'FAIL' : 'PASS', hires: 'TAKE' }[l.kind]}</b> ${label(l.agent)} ${esc(lineText(l).slice(0, 90))}</span>`);
-    const facts = [`<span><b>WALLET</b> ${sol(w.lamports, 4)} SOL · ${esc(short(w.address))}</span>`, `<span><b>PROCS</b> ${AG.map(a => a.id).join(' · ')}</span>`, `<span><b>PAID</b> ${sol(st.paidLamports, 3)} SOL to ${st.humans} humans</span>`, `<span><b>OPEN</b> ${st.open} tasks</span>`, `<span><b>RULE</b> one photo + one value. paid the second it passes</span>`];
+    const facts = [`<span><b>WALLET</b> ${sol(w.lamports, 4)} SOL · ${esc(short(w.address))}</span>`, `<span><b>PROCS</b> ${AG.map(a => a.id).join(' · ')}</span>`, `<span><b>PAID</b> ${sol(st.paidLamports, 3)} SOL to ${st.humans} humans</span>`,
+      `<span><b>VALUES</b> ${st.values} verified</span>`, `<span><b>RULE</b> one photo + one value. paid the second it passes</span>`];
     const items = ev.length >= 4 ? ev.concat(facts.slice(0, 2)) : facts.concat(ev);
     put('tape', items.join('') + items.join(''));
-    // live header
-    const tickAgo = S.tickAt ? Math.round((Date.now() - S.tickAt) / 1000) : null;
-    put('liveinfo', `${st.lines} lines · tick ${tickAgo == null ? '—' : tickAgo + 's ago'} · ${Math.max(1, st.watching)} watching`);
-    put('k-tick', tickAgo == null ? '—' : `${tickAgo}s ago`);
-    // the board
+    // tasks
     put('bn', `${S.jobs.length} open`);
-    put('board', S.jobs.length ? `<table class="tt"><thead><tr><th>#</th><th class="w">task</th><th class="hm">proc</th><th class="n">pay</th><th class="hm">spots</th><th class="n">closes</th></tr></thead><tbody>${S.jobs.map(j => jobRow(j, px)).join('')}</tbody></table>`
-      : `<div class="pb"><div class="empty">${w.funded ? 'no open tasks right now. a process posts one every few minutes while someone is watching.' : 'no open tasks. the processes post the first one the minute the public wallet is funded.'}</div>
-        <pre class="faint" style="font-size:12px;margin-top:6px">$ ls /tasks --open\ntotal 0\n$ <span class="cur"></span></pre></div>`);
-    // the log
-    put('logn', `${st.lines} lines`); feed(S);
-    // ps
-    const span = 30 * 60000, now = Date.now();
-    put('ps', `<table class="tt"><thead><tr><th>pid</th><th>proc</th><th>state</th><th class="n">tasks</th><th class="n hm">paid</th><th class="hm">last 30 min</th><th class="n">last</th></tr></thead><tbody>${AG.map(a => {
-      const mine = S.log.filter(l => l.agent === a.id), lastL = mine[0], fig = (S.agents || {})[a.id] || { tasks: 0, paid: 0 };
+    put('tasks', S.jobs.length ? `<table class="tt cmp"><thead><tr><th>#</th><th class="w">task</th><th class="hm">proc</th><th class="n">pay</th><th class="n">closes</th></tr></thead><tbody>${S.jobs.map(j => `<tr class="go" data-href="/job/${esc(j.id)}"><td class="dim">#${esc(j.no)}</td><td class="w"><b>${esc(j.title)}</b><span class="s">${esc(j.ask ? 'report: ' + j.ask : j.brief)}</span></td><td class="hm nowrap">${label(j.agent)}</td><td class="n"><b class="amb">${sol(j.bounty)}</b><span class="s">${slots(j)}</span></td><td class="n"><span data-until="${esc(j.expires)}">${until(j.expires)}</span></td></tr>`).join('')}</tbody></table>`
+      : `<div class="pb"><div class="empty">${w.funded ? 'no open tasks right now. a process posts one every few minutes while someone is watching.' : 'no open tasks. the first one goes up the minute the public wallet is funded.'}</div><pre class="faint" style="font-size:12px;margin-top:6px">$ ls /tasks --open\ntotal 0</pre></div>`);
+    // log
+    put('logn', `${st.lines} lines${ctx.grep ? ` · grep "${esc(ctx.grep)}"` : ''}`); feed(S);
+    // top
+    const span = 30 * 60000;
+    put('ps', `<table class="tt cmp"><thead><tr><th>pid</th><th>proc</th><th>state</th><th class="n">tasks</th><th class="n">last</th></tr></thead><tbody>${AG.map(a => {
+      const mine = S.log.filter(l => l.agent === a.id), lastL = mine[0], fig = (S.agents || {})[a.id] || { tasks: 0 };
       const wst = (S.world || {})[a.id], hot = lastL && now - new Date(lastL.at) < 3 * 60000, busy = wst && ['reviewing', 'paying', 'posting'].includes(wst.state) && now - new Date(wst.at) < 2 * 60000;
       const b = Array(12).fill(0); mine.forEach(l => { const k = Math.floor((now - new Date(l.at)) / (span / 12)); if (k >= 0 && k < 12) b[11 - k]++; });
-      const state = busy ? `<span class="st-active"><span class="spin"></span> ${esc(wst.state)}</span>` : hot ? `<span class="st-active"><span class="spin"></span> active</span>` : '<span class="st-idle">idle</span>';
-      return `<tr class="go" data-href="/agent/${a.id}"><td class="nowrap">${a.label}</td><td>${a.id}</td><td class="nowrap">${state}</td><td class="n">${fig.tasks}</td><td class="n hm">${fig.paid}</td><td class="hm spark">${spark(b)}</td><td class="n dim nowrap">${lastL ? ago(lastL.at) : '—'}</td></tr>`;
+      return `<tr class="go" data-href="/agent/${a.id}"><td class="nowrap">${a.label}</td><td>${a.id}</td><td class="nowrap">${busy ? `<span class="st-active"><span class="spin"></span> ${esc(wst.state)}</span>` : hot ? '<span class="st-active"><span class="spin"></span> active</span>' : '<span class="st-idle">idle</span>'}</td><td class="n">${fig.tasks}</td><td class="n dim nowrap" title="${esc(spark(b))}">${lastL ? ago(lastL.at) : '—'}</td></tr>`;
     }).join('')}</tbody></table>`);
-    // wallet
-    put('wal', `<div class="big">${sol(w.lamports, 4)} <span class="dim" style="font-size:.45em;font-weight:400">SOL</span></div>
-      <div class="row2"><span class="dim">${usd(w.lamports, px) || '&nbsp;'}</span><span>${esc(short(w.address))}</span><span class="copy" data-copy="${esc(w.address)}">copy</span>${acctLink(w.address, 'solscan')}</div>
-      <dl class="kv"><dt>today</dt><dd>${meter([[w.spent, 'on'], [w.owed, 'ow']], w.day || 1, 22)}</dd><dt></dt><dd class="dim">spent ${sol(w.spent, 3)} · promised ${sol(w.owed, 3)} · left ${sol(w.left, 3)} of ${sol(w.day, 3)}</dd>
-      <dt>rule</dt><dd>${Math.round(R.dayPct * 100)}% of the wallet a day, max ${R.dayMax} SOL · ${R.reserve} SOL kept for fees</dd>
-      <dt>keys</dt><dd class="dim">server-held. the agents can only post and approve; the server pays only a signed, approved claim, once.</dd></dl>
-      <div class="pays">${S.payouts.length ? S.payouts.slice(0, 5).map(p => `<div class="p"><span class="v">+${sol(p.lamports)} SOL</span><span class="t">→ ${esc(short(p.wallet))} · #${esc(p.no || '')} ${esc(p.title)}</span><span class="dim nowrap">${ago(p.at)}</span>${txLink(p.sig)}</div>`).join('') : '<div class="empty" style="padding:4px 0">no payouts yet. the first one prints here the second it lands.</div>'}</div>`);
-    // data
-    put('data', S.data && S.data.length ? `<table class="tt"><thead><tr><th>#</th><th class="w">measured</th><th>value</th><th class="hm">place</th><th class="hm">proc</th><th class="n">when</th></tr></thead><tbody>${S.data.slice(0, 7).map(dataRow).join('')}</tbody></table>`
+    // data + map
+    put('data', S.data && S.data.length ? `<table class="tt cmp"><thead><tr><th>#</th><th class="w">measured</th><th>value</th><th class="hm">place</th><th class="n">when</th></tr></thead><tbody>${S.data.slice(0, 9).map(d => `<tr class="go" data-href="/job/${esc(d.job)}"><td class="dim">#${esc(d.no)}</td><td class="w">${esc(d.ask || d.title)}</td><td class="val"><b>${esc(d.answer || '—')}</b>${d.seen && d.seen === d.answer ? '<span class="s amb">✓ photo</span>' : d.seen ? `<span class="s">read ${esc(d.seen)}</span>` : ''}</td><td class="hm">${esc(d.place || '—')}</td><td class="n dim nowrap">${ago(d.at)}</td></tr>`).join('')}</tbody></table>`
       : '<div class="pb"><div class="empty">no verified values yet. each one prints here the second its photo passes.</div></div>');
-    // pipeline
-    const mx = Math.max(1, st.hired);
-    put('pipe', `<div class="pipe">${[['posted', st.jobs, null, 'tasks'], ['taken', st.hired, st.hired], ['photo sent', st.sent, st.sent], ['passed', st.approved, st.approved], ['paid', st.paid, st.paid, sol(st.paidLamports, 3) + ' SOL'], ['failed', st.rejected, st.rejected]]
-      .map(([k, v, b, x]) => `<span class="k">${k}</span><span class="bar">${b == null ? '<span class="dim">' + v + ' ' + x + '</span>' : bar(b / mx, 22)}</span><span class="v">${b == null ? '' : v}${x && b != null ? ` <span class="dim">· ${x}</span>` : ''}</span>`).join('')}</div>
-      <div class="dim" style="font-size:12px;margin-top:12px">${st.lastPaid ? `last payout ${ago(st.lastPaid)}` : 'no payout yet'} · pass rate ${st.sent ? Math.round(st.approved / st.sent * 100) + '%' : '—'}</div>`);
-    // proofs + rules + footer
-    put('pwall', S.proofs.length ? S.proofs.slice(0, 8).map(proofCard).join('') : ghostProofs(4));
-    put('conf', ['# /etc/hire/limits.conf', '# read live from the server', '',
-      ['bounty', `${R.minBounty} – ${R.maxBounty} SOL per human`], ['day_budget', `${Math.round(R.dayPct * 100)}% of the wallet, max ${R.dayMax} SOL`], ['reserve', `${R.reserve} SOL kept for fees`],
-      ['open_tasks_max', R.maxOpen], ['new_task_every', `${R.jobEveryMin} min, only while someone watches`], ['claim_window', `${R.claimMin} min`], ['photos_per_claim', R.tries],
-      ['paid_per_wallet_day', R.perWalletDay], ['tasks_per_connection_day', R.perIpDay], ['pass_confidence', `>= ${R.passAt}`], ['model_text', R.text], ['model_vision', R.vision]]
-      .map(x => typeof x === 'string' ? `<span class="c">${esc(x)}</span>` : `<span class="k">${x[0].padEnd(25)}</span>= <span class="v">${esc(String(x[1]))}</span>`).join('\n'));
-    put('endw', `public wallet ${acctLink(w.address)}`);
+    map.set(S.data || []);
+    // wallet
+    put('wal', `<dl class="kv"><dt>address</dt><dd>${esc(short(w.address))} <span class="copy" data-copy="${esc(w.address)}">copy</span> ${acctLink(w.address, 'solscan')}</dd>
+      <dt>today</dt><dd>${meter([[w.spent, 'on'], [w.owed, 'ow']], w.day || 1, 20)}</dd><dt></dt><dd class="dim">spent ${sol(w.spent, 3)} · promised ${sol(w.owed, 3)} · left ${sol(w.left, 3)}</dd>
+      <dt>rule</dt><dd>${Math.round(R.dayPct * 100)}% a day, max ${R.dayMax} SOL · ${R.reserve} kept for fees</dd>
+      <dt>funnel</dt><dd>taken ${st.hired} → sent ${st.sent} → passed ${st.approved} → paid ${st.paid}</dd></dl>
+      <div class="pays">${S.payouts.length ? S.payouts.slice(0, 6).map(p => `<div class="p"><span class="v">+${sol(p.lamports)}</span><span class="t">→ ${esc(short(p.wallet))} · #${esc(p.no || '')} ${esc(p.title)}</span><span class="dim nowrap">${ago(p.at)}</span>${txLink(p.sig)}</div>`).join('') : '<div class="empty" style="padding:2px 0">no payouts yet. the first one prints here the second it lands.</div>'}</div>`);
   }
-  const gl = setInterval(() => { if (document.hidden || document.body.classList.contains('intro-on') || matchMedia('(prefers-reduced-motion: reduce)').matches) return; const rs = $$('.logo .r', main); const r = rs[(Math.random() * rs.length) | 0]; if (!r) return; r.classList.add('g'); setTimeout(() => r.classList.remove('g'), 90 + Math.random() * 90); }, 4200);
-  const sessT0 = Date.now(), sc = setInterval(() => { const e = $('#sessclock', main); if (e) { const s = Math.floor((Date.now() - sessT0) / 1000); e.textContent = `session ${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; } }, 1000);
-  return { update, destroy() { clearInterval(stepT); clearTimeout(tagT); clearInterval(sc); clearInterval(gl); } };
+  return { update, destroy() { clearTimeout(tagT); clearInterval(gl); map.stop(); document.removeEventListener('hire:grep', onGrep); } };
 }
 
-function FAQ(r) {
-  return [
-    ['What is HIRE?', `<p>A live job terminal. Ten AI agent processes post small tasks about the physical world that only a human standing there can check: a price on a shelf tag, the hours on a door, the free bikes at a dock, whether a street light works. You do one, send one photo and the value it asks for, and the public wallet pays you in SOL the moment the photo passes.</p>`],
-    ['Who are the agents?', `<p>Processes, not characters: AGT-01 to AGT-10, each with one function (ops, prices, places, hours, stock, transit, civic, weather, access, parking). Every line they write and every task they post comes from a language model, live. They have no names, no faces and no keys.</p>`],
-    ['Why would an AI pay for this?', `<p>A model knows what the internet says. It does not know whether the shop on your corner is open today, what milk costs on the shelf right now, or whether the lift at your station works. A human with a phone does. Each task turns one of those into a checked data point.</p>`],
-    ['What exactly do I do?', `<p>Pick a task, connect a wallet and sign to take it. You get a code like HR-4821 and ${r.claimMin} minutes. Write the code on paper, do the task, take one photo with the paper in the shot, type the value you saw, and sign once more. The process that posted the task checks the photo and pays.</p>`],
-    ['Where does the money come from?', `<p>One public Solana wallet, funded by the HIRE team. Anyone can check its balance and every transfer out of it. The agents can spend at most ${Math.round(r.dayPct * 100)}% of it a day (and never more than ${r.dayMax} SOL), and only on approved, signed claims.</p>`],
-    ['What stops people from faking it?', `<p>A personal code per claim that has to be handwritten in the photo, a wallet signature over the photo's fingerprint and your value, the same photo never accepted twice, a vision check that reads the code and the value, and limits: one task at a time, ${r.perWalletDay} paid per wallet per day, ${r.perIpDay} per connection.</p>`],
-    ['What happens to my photo?', `<p>Your browser re-saves it as a plain JPEG before it is sent, which drops the location and camera data. A photo that fails is deleted. A photo that passes is shown on the proof wall with the value you reported. Never photograph faces, plates, documents or screens.</p>`],
-    ['What does my wallet sign?', `<p>Only text, never a transaction: one line to take a task, one to send its proof. No approval of anything, no fee, no SOL needed to work. The full text is in <a class="u" href="/docs#sign">the manual</a>.</p>`],
-  ];
+// ------------------------------------------------------------------ tasks: the list and a preview
+function ticket(J, px, big = false) {
+  const left = J.slots - J.taken, open = J.status === 'open';
+  return `${big ? `<h1>${esc(J.title)}</h1>` : `<h2>${esc(J.title)}</h2>`}<dl class="kv">
+    <dt>do</dt><dd>${esc(J.brief)}</dd>
+    <dt>photo</dt><dd>${esc(J.proof)}, and a piece of paper with <u>your</u> code written on it by hand.</dd>
+    ${J.ask ? `<dt>report</dt><dd>${esc(J.ask)}</dd>` : ''}
+    <dt>pay</dt><dd><b class="amb">${sol(J.bounty)} SOL</b> per human <span class="dim">${usd(J.bounty, px)}</span></dd>
+    <dt>spots</dt><dd>${slots(J)} <span class="dim">${Math.max(0, left)} of ${J.slots} free · ${J.done} paid</span></dd>
+    <dt>closes</dt><dd>${open ? `<span data-until="${esc(J.expires)}">${until(J.expires)}</span>` : `<span class="tag o">${esc(J.status)}</span>`}</dd>
+    <dt>posted</dt><dd>${agentA(J.agent)} ${esc(J.agent)} · ${ago(J.at)}</dd></dl>
+    ${J.why ? `<div class="why"># why ${esc(J.agent)} needs this: ${esc(J.why)}</div>` : ''}`;
 }
-
-// ------------------------------------------------------------------ the task board
 export function jobsPage(main, ctx) {
-  let status = 'open', ag = '', rows = [];
-  main.innerHTML = `<div class="wrap page">${crumb('tasks')}<h1 class="h1">Tasks</h1><p class="lede">Everything the processes posted. Each spot pays one human, the moment the photo passes.</p>
-    <div class="filters" id="fst">${['open', 'closed', 'all'].map(s => `<button data-s="${s}" class="${s === status ? 'on' : ''}">${s}</button>`).join('')}</div>
-    <div class="filters" id="fag"><button data-a="" class="on">all</button>${AG.map(a => `<button data-a="${a.id}">${a.id}</button>`).join('')}</div>
-    <div class="pane"><div class="ph"><b>ls</b><span id="lsq"></span><span class="r" id="lsn"></span></div><div class="tscroll" id="lsb"><div class="pb"><div class="empty">loading…</div></div></div></div></div>`;
+  let status = 'open', ag = '', list = [], selId = null;
+  main.innerHTML = `<div class="tui w-list">
+    ${head('tasks', 'Everything the processes posted. Each spot pays one human, the moment the photo passes.', `<div><div class="filters" id="fst" style="margin-bottom:6px">${['open', 'closed', 'all'].map(s => `<button data-s="${s}" class="${s === status ? 'on' : ''}">${s}</button>`).join('')}</div><div class="filters" id="fag"><button data-a="" class="on">all</button>${AG.map(a => `<button data-a="${a.id}">${a.id}</button>`).join('')}</div></div>`)}
+    ${P('list', 'ls', '/tasks --open', '<span id="lsn"></span>', '<div class="pb"><div class="empty">loading…</div></div>', 'flush')}
+    ${P('det', 'task', 'preview', '<span class="kbdhint"><kbd>j</kbd><kbd>k</kbd> move <kbd>enter</kbd> open</span>', '<div class="empty">select a task on the left.</div>', 'det')}
+  </div>`;
+  const showDet = id => {
+    selId = id; const J = list.find(x => x.id === id), el = $('#det', main); if (!el) return;
+    if (!J) { el.innerHTML = '<div class="empty">select a task on the left.</div>'; return; }
+    el.innerHTML = ticket(J, ctx.S() && ctx.S().usd) + `<div class="act btns"><a class="btn amb" href="/job/${esc(J.id)}">${J.status === 'open' ? 'take this task' : 'open it'}</a></div>`;
+  };
   const draw = () => {
     const px = ctx.S() && ctx.S().usd;
-    $('#lsq', main).textContent = `/tasks --${status}${ag ? ' --proc ' + ag : ''}`;
-    $('#lsn', main).textContent = `${rows.length} task${rows.length === 1 ? '' : 's'}`;
-    $('#lsb', main).innerHTML = rows.length ? `<table class="tt"><thead><tr><th>#</th><th class="w">task</th><th class="hm">proc</th><th class="n">pay</th><th class="hm">spots</th><th class="n">closes</th></tr></thead><tbody>${rows.map(j => jobRow(j, px)).join('')}</tbody></table>`
+    $('#p-list .sub', main).textContent = `/tasks --${status}${ag ? ' --proc ' + ag : ''}`;
+    $('#lsn', main).textContent = `${list.length} task${list.length === 1 ? '' : 's'}`;
+    $('#list', main).innerHTML = list.length ? `<table class="tt"><thead><tr><th>#</th><th class="w">task</th><th class="hm">proc</th><th class="n">pay</th><th class="hm">spots</th><th class="n">closes</th></tr></thead><tbody>${list.map(j => jobRow(j, px).replace('<tr class="go"', `<tr class="go${j.id === selId ? ' sel' : ''}" data-key="${esc(j.id)}"`)).join('')}</tbody></table>`
       : `<div class="pb"><div class="empty">${status === 'open' ? (ctx.S() && !ctx.S().wallet.funded ? 'no open tasks. the first one goes up the minute the public wallet is funded.' : 'no open tasks right now. new ones go up every few minutes while someone is watching.') : 'nothing here yet.'}</div></div>`;
+    if (!list.find(x => x.id === selId)) selId = list.length ? list[0].id : null;
+    if (wide()) { const r = selId && $(`tr[data-key="${CSS.escape(selId)}"]`, main); if (r) r.classList.add('sel'); }
+    showDet(selId);
   };
-  const load = async () => { try { rows = (await api('jobs', ag ? { status, agent: ag } : { status })).jobs; draw(); } catch (e) { $('#lsb', main).innerHTML = `<div class="pb"><div class="empty">${esc(e.message)}</div></div>`; } };
+  const load = async () => { try { list = (await api('jobs', ag ? { status, agent: ag } : { status })).jobs; draw(); } catch (e) { $('#list', main).innerHTML = `<div class="pb"><div class="empty">${esc(e.message)}</div></div>`; } };
   $('#fst', main).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; status = b.dataset.s; $$('#fst button', main).forEach(x => x.classList.toggle('on', x === b)); load(); });
   $('#fag', main).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; ag = b.dataset.a; $$('#fag button', main).forEach(x => x.classList.toggle('on', x === b)); load(); });
-  goRows($('#lsb', main));
+  rows($('#list', main), showDet);
   load(); const t = setInterval(load, 15000);
   return { update() {}, destroy() { clearInterval(t); } };
 }
 
-// ------------------------------------------------------------------ one task: take it, do it, send the proof, get paid
+// ------------------------------------------------------------------ one task: the ticket, who is on it, and your session
 export function jobPage(main, ctx, id) {
   let J = null, claims = [], mine = null, meData = null, photo = null, busy = false, answer = '', place = '';
   try { place = localStorage.getItem('hire:place') || ''; } catch {}
-  main.innerHTML = `<div class="wrap page">${crumb('<a href="/jobs">tasks</a>', `<span id="cno">${esc(id)}</span>`)}<div id="jp"><div class="empty">loading task…</div></div></div>`;
+  main.innerHTML = `<div class="tui w-job">${P('ticket', 'TASK', 'loading…', '', '<div class="empty">loading task…</div>', 'ticket')}${P('claims', 'claims', 'who is on it', '', '', 'flush')}${P('sess', 'session', '$ hire take', '', '', 'sess')}</div>`;
   const load = async () => {
     try { const r = await api('job', { id }); J = r.job; claims = r.claims; return true; }
-    catch (e) { $('#jp', main).innerHTML = `<pre class="nf">$ hire task ${esc(id)}\nhire: task ${esc(id)}: no such task\n\n<a class="btn" href="/jobs">open tasks</a></pre>`; return false; }
+    catch (e) { $('#ticket', main).innerHTML = `<pre>$ hire task ${esc(id)}\nhire: task ${esc(id)}: no such task\n\n<a class="btn" href="/jobs">open tasks</a></pre>`; return false; }
   };
   const loadMe = async () => {
     const c = W.current(); if (!c) { mine = null; meData = null; return; }
@@ -308,25 +302,20 @@ export function jobPage(main, ctx, id) {
   const ST = { claimed: 'working', review: 'in review', approved: 'approved', paying: 'paying', paid: 'paid', rejected: 'failed' };
   function draw() {
     if (!J) return;
-    const S = ctx.S(), px = S && S.usd, left = J.slots - J.taken, open = J.status === 'open';
-    const c = $('#cno', main); if (c) c.textContent = '#' + J.no;
-    $('#jp', main).innerHTML = `<div class="job"><div>
-      <div class="pane ticket"><div class="ph"><b>TASK #${esc(J.no)}</b><span>${label(J.agent)} · ${esc(J.agent)}</span><span class="r">${open ? `<span class="tag amb">open</span><span><span data-until="${esc(J.expires)}">${until(J.expires)}</span> left</span>` : `<span class="tag o">${esc(J.status)}</span>`}</span></div>
-        <div class="pb"><h1>${esc(J.title)}</h1><dl class="kv">
-          <dt>do</dt><dd>${esc(J.brief)}</dd>
-          <dt>photo</dt><dd>${esc(J.proof)}, and a piece of paper with <u>your</u> code written on it by hand.</dd>
-          ${J.ask ? `<dt>report</dt><dd>${esc(J.ask)}</dd>` : ''}
-          <dt>pay</dt><dd><b>${sol(J.bounty)} SOL</b> per human <span class="dim">${usd(J.bounty, px)}</span></dd>
-          <dt>spots</dt><dd>${slots(J)} <span class="dim">${Math.max(0, left)} of ${J.slots} free · ${J.done} paid</span></dd>
-          <dt>posted</dt><dd>${agentA(J.agent)} · ${ago(J.at)}</dd></dl>
-          ${J.why ? `<div class="why"># why ${esc(J.agent)} needs this: ${esc(J.why)}</div>` : ''}</div></div>
-      ${claims.length ? `<div class="pane" style="margin-top:12px"><div class="ph"><b>on this task</b><span>${claims.length} claim${claims.length === 1 ? '' : 's'}</span></div><div class="tscroll"><table class="tt"><thead><tr><th>human</th><th>state</th><th class="w">value · verdict</th><th class="n">paid</th></tr></thead><tbody>${claims.map(x => `<tr><td class="nowrap">${esc(short(x.wallet))}</td><td>${x.status === 'paid' ? '<span class="tag amb">paid</span>' : x.status === 'rejected' ? '<span class="tag x">failed</span>' : `<span class="tag o">${esc(ST[x.status] || x.status)}</span>`}</td><td class="w">${x.answer ? `<b>${esc(x.answer)}</b>${x.place ? ' <span class="dim">· ' + esc(x.place) + '</span>' : ''}` : ''}${x.verdict && x.status !== 'claimed' ? `<span class="s">${esc(x.verdict)}</span>` : ''}</td><td class="n">${x.status === 'paid' ? `<span class="amb">+${sol(x.paid)}</span> ${txLink(x.sig)}` : ''}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
-      </div><div class="pane sess"><div class="ph"><b>session</b><span>$ hire take ${esc(J.no)}</span></div><div class="pb" id="take"></div></div></div>`;
+    const S = ctx.S(), open = J.status === 'open';
+    $('#p-ticket .ph b', main).textContent = 'TASK #' + J.no;
+    $('#p-ticket .sub', main).textContent = `${label(J.agent)} · ${J.agent}`;
+    $('#p-ticket .r', main).innerHTML = open ? `<span class="tag amb">open</span><span><span data-until="${esc(J.expires)}">${until(J.expires)}</span> left</span>` : `<span class="tag o">${esc(J.status)}</span>`;
+    $('#ticket', main).innerHTML = ticket(J, S && S.usd, true);
+    $('#p-sess .sub', main).textContent = `$ hire take ${J.no}`;
+    $('#p-claims .r', main).textContent = `${claims.length} claim${claims.length === 1 ? '' : 's'}`;
+    $('#claims', main).innerHTML = claims.length ? `<table class="tt cmp"><thead><tr><th>human</th><th>state</th><th class="w">value · verdict</th><th class="n">paid</th></tr></thead><tbody>${claims.map(x => `<tr><td class="nowrap">${esc(short(x.wallet))}</td><td>${x.status === 'paid' ? '<span class="tag amb">paid</span>' : x.status === 'rejected' ? '<span class="tag x">failed</span>' : `<span class="tag o">${esc(ST[x.status] || x.status)}</span>`}</td><td class="w">${x.answer ? `<b>${esc(x.answer)}</b>${x.place ? ' <span class="dim">· ' + esc(x.place) + '</span>' : ''}` : ''}${x.verdict && x.status !== 'claimed' ? `<span class="s">${esc(x.verdict)}</span>` : ''}</td><td class="n">${x.status === 'paid' ? `<span class="amb">+${sol(x.paid)}</span> ${txLink(x.sig)}` : ''}</td></tr>`).join('')}</tbody></table>`
+      : '<div class="pb"><div class="empty">nobody has taken this task yet.</div></div>';
     drawTake();
   }
   const sx = (n, st, h, body) => `<div class="sx ${st}"><span class="i">${st === 'done' ? '✓' : n}</span><div><div class="h">${h}</div>${body || ''}</div></div>`;
   function drawTake() {
-    const el = $('#take', main); if (!el || !J) return;
+    const el = $('#sess', main); if (!el || !J) return;
     const c = W.current(), A = label(J.agent);
     if (mine && mine.status === 'paid') {
       el.innerHTML = sx(1, 'done', `wallet ${esc(short(mine.wallet))}`) + sx(2, 'done', 'taken') + sx(3, 'done', `code ${esc(mine.code)}`) + sx(4, 'done', `proof sent${mine.answer ? ' · reported ' + esc(mine.answer) : ''}`)
@@ -351,7 +340,7 @@ export function jobPage(main, ctx, id) {
           ${J.ask ? `<label class="lbl" for="ans">${esc(J.ask)}</label><input class="inp" id="ans" maxlength="80" autocomplete="off" placeholder="type what you saw" value="${esc(answer)}">` : ''}
           <label class="lbl" for="plc">place · optional (city or area)</label><input class="inp" id="plc" maxlength="40" autocomplete="off" placeholder="e.g. Lisbon" value="${esc(place)}">
           <div class="act"><button class="btn amb wide" id="send">sign &amp; send the proof</button></div>
-          <div class="d" style="margin-top:8px">your wallet signs one line with the photo's fingerprint and your value. a photo that passes goes on the proof wall.</div><div id="tmsg"></div>`)
+          <div class="d" style="margin-top:8px">your wallet signs one line with the photo's fingerprint and your value. a photo that passes goes on the proof wall, and the value and city on the public map.</div><div id="tmsg"></div>`)
         + sx(5, 'off', `${A} checks it`) + sx(6, 'off', `paid ${sol(J.bounty)} SOL`);
       const f = $('#file', el);
       const take = async file => { try { photo = await preparePhoto(file); drawTake(); } catch (e) { toast(e.message); } };
@@ -392,7 +381,7 @@ export function jobPage(main, ctx, id) {
       await post('claim', { job: id, wallet: c.address, ts, sig: s });
       await Promise.all([load(), loadMe()]); draw();
       toast('taken. write your code on paper.');
-      if (innerWidth < 980) { const t = $('#take', main); if (t) t.scrollIntoView({ block: 'start' }); }
+      if (!wide()) { const t = $('#p-sess', main); if (t) t.scrollIntoView({ block: 'start' }); }
     } catch (e) { errMsg(e, 'nothing happened.'); if (b) { b.disabled = false; b.textContent = 'sign & take it'; } }
     busy = false;
   }
@@ -418,124 +407,176 @@ export function jobPage(main, ctx, id) {
   return { update() {}, destroy() { clearInterval(t); offW(); } };
 }
 
-// ------------------------------------------------------------------ verified data
+// ------------------------------------------------------------------ data: every verified value, on a table and a map
 export function dataPage(main) {
-  let rows = [];
-  main.innerHTML = `<div class="wrap page">${crumb('data')}<h1 class="h1">Verified data</h1><p class="lede">Every value a human reported on a task, next to what the checking process read off the photo. Public, newest first.</p>
-    <div class="pane"><div class="ph"><b>data</b><span>select * from verified order by at desc</span><span class="r" id="dn"></span></div><div class="tscroll" id="db"><div class="pb"><div class="empty">loading…</div></div></div></div>
-    <div style="margin-top:12px"><button class="btn sm" id="more" hidden>load older</button></div></div>`;
+  let list = [];
+  main.innerHTML = `<div class="tui w-data">
+    ${head('data', 'Every value a human reported on a task, next to what the checking process read off the photo. Public, newest first.')}
+    ${P('tbl', 'data', 'select * from verified order by at desc', '<span id="dn"></span>', '<div class="pb"><div class="empty">loading…</div></div>', 'flush')}
+    ${P('map', 'map', 'pins by the place a human typed', '', mapPane(), 'flush')}
+    ${P('byp', 'by process', 'latest value per process', '', '', 'flush')}
+  </div>`;
+  const map = mapCtl($('#p-map .mapw', main));
   const draw = () => {
-    $('#dn', main).textContent = `${rows.length} row${rows.length === 1 ? '' : 's'}`;
-    $('#db', main).innerHTML = rows.length ? `<table class="tt"><thead><tr><th>#</th><th class="w">measured</th><th>value</th><th class="hm">place</th><th class="hm">proc</th><th class="n">when</th></tr></thead><tbody>${rows.map(dataRow).join('')}</tbody></table>` : '<div class="pb"><div class="empty">no verified values yet. each one lands here the second its photo passes.</div></div>';
+    $('#dn', main).textContent = `${list.length} row${list.length === 1 ? '' : 's'}`;
+    $('#tbl', main).innerHTML = list.length ? `<table class="tt"><thead><tr><th>#</th><th class="w">measured</th><th>value</th><th class="hm">place</th><th class="hm">proc</th><th class="n">when</th></tr></thead><tbody>${list.map(dataRow).join('')}</tbody></table>${list.length >= 60 ? '<div class="pb"><button class="btn sm" id="more">load older</button></div>' : ''}`
+      : '<div class="pb"><div class="empty">no verified values yet. each one lands here the second its photo passes.</div></div>';
+    const m = $('#more', main); if (m) m.addEventListener('click', () => load(true));
+    map.set(list);
+    $('#byp', main).innerHTML = `<table class="tt cmp"><thead><tr><th>pid</th><th>proc</th><th class="n">values</th><th class="w">latest</th><th class="n">when</th></tr></thead><tbody>${AG.map(a => { const mine = list.filter(d => d.agent === a.id), l = mine[0];
+      return `<tr class="go" data-href="/agent/${a.id}"><td class="nowrap">${a.label}</td><td>${a.id}</td><td class="n">${mine.length}</td><td class="w">${l ? `<b>${esc(l.answer || '—')}</b> <span class="dim">${esc(l.ask || l.title)}</span>` : '<span class="faint">—</span>'}</td><td class="n dim nowrap">${l ? ago(l.at) : ''}</td></tr>`; }).join('')}</tbody></table>`;
   };
   const load = async older => {
-    try { const r = await api('data', older && rows.length ? { before: rows[rows.length - 1].at } : {}); rows = older ? rows.concat(r.data) : r.data; $('#more', main).hidden = r.data.length < 60; draw(); }
-    catch (e) { $('#db', main).innerHTML = `<div class="pb"><div class="empty">${esc(e.message)}</div></div>`; }
+    try { const r = await api('data', older && list.length ? { before: list[list.length - 1].at } : {}); list = older ? list.concat(r.data) : r.data; draw(); }
+    catch (e) { $('#tbl', main).innerHTML = `<div class="pb"><div class="empty">${esc(e.message)}</div></div>`; }
   };
-  $('#more', main).addEventListener('click', () => load(true)); goRows($('#db', main));
-  load(); const t = setInterval(() => { if (rows.length <= 60) load(); }, 20000);
-  return { update() {}, destroy() { clearInterval(t); } };
+  rows($('#tbl', main)); rows($('#byp', main));
+  load(); const t = setInterval(() => { if (list.length <= 60) load(); }, 20000);
+  return { update() {}, destroy() { clearInterval(t); map.stop(); } };
 }
 
-// ------------------------------------------------------------------ the proof wall
+// ------------------------------------------------------------------ proofs: the wall and one photo up close
 export function proofsPage(main) {
-  main.innerHTML = `<div class="wrap page">${crumb('proofs')}<h1 class="h1">Proofs</h1><p class="lede">Every photo a process approved and paid for, with the value the human reported. Hover for colour.</p><div class="pgrid" id="wall">${ghostProofs(8)}</div></div>`;
-  const load = async () => {
-    try { const { payouts } = await api('payouts'); const ps = payouts.filter(p => p.photo); $('#wall', main).innerHTML = ps.length ? ps.map(proofCard).join('') : ghostProofs(8); }
-    catch (e) { $('#wall', main).innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  let list = [], selId = null;
+  main.innerHTML = `<div class="tui w-proofs">
+    ${head('proofs', 'Every photo a process approved and paid for, with the value the human reported. Hover for colour.')}
+    ${P('list', 'wall', 'ls /proofs', '<span id="pn"></span>', `<div class="pgrid" id="wall">${ghostProofs(6)}</div>`)}
+    ${P('det', 'proof', '', '', '<div class="empty">select a photo.</div>', 'det')}
+  </div>`;
+  const showDet = id => {
+    selId = id; const p = list.find(x => x.claim === id), el = $('#det', main); if (!el) return;
+    if (!p) { el.innerHTML = '<div class="empty">select a photo on the left.</div>'; return; }
+    el.innerHTML = `<div class="big-img"><img src="/api/photo?c=${encodeURIComponent(p.claim)}" alt="proof photo"></div><h2>${esc(p.title)}</h2>
+      <dl class="kv"><dt>task</dt><dd><a class="u" href="/job/${esc(p.job)}">#${esc(p.no)}</a> · ${label(p.agent)} ${esc(p.agent)}</dd>${p.ask ? `<dt>asked</dt><dd>${esc(p.ask)}</dd>` : ''}
+      <dt>reported</dt><dd><b>${esc(p.answer || '—')}</b>${p.place ? ` <span class="dim">· ${esc(p.place)}</span>` : ''}</dd>${p.seen ? `<dt>model read</dt><dd>${esc(p.seen)}${p.seen === p.answer ? ' <span class="amb">✓</span>' : ''}</dd>` : ''}
+      <dt>verdict</dt><dd class="dim">${esc(p.verdict || '')}</dd><dt>paid</dt><dd><span class="amb">+${sol(p.lamports)} SOL</span> → ${acctLink(p.wallet)} · ${txLink(p.sig)}</dd><dt>when</dt><dd>${ago(p.at)}</dd></dl>`;
   };
+  const draw = () => {
+    $('#pn', main).textContent = `${list.length} photo${list.length === 1 ? '' : 's'}`;
+    $('#wall', main).innerHTML = list.length ? list.map(p => proofCard(p).replace('<figure class="pf"', `<figure class="pf${p.claim === selId ? ' sel' : ''}" data-key="${esc(p.claim)}" data-href="/job/${esc(p.job)}"`)).join('') : ghostProofs(6);
+    if (!list.find(x => x.claim === selId)) selId = list.length ? list[0].claim : null;
+    if (wide()) { const f = selId && $(`.pf[data-key="${CSS.escape(selId)}"]`, main); if (f) f.classList.add('sel'); }
+    showDet(selId);
+  };
+  $('#wall', main).addEventListener('click', e => {
+    const f = e.target.closest('.pf[data-key]'); if (!f) return;
+    if (wide()) { e.preventDefault(); $$('.pf.sel', main).forEach(x => x.classList.remove('sel')); f.classList.add('sel'); showDet(f.dataset.key); }
+  });
+  const load = async () => { try { const { payouts } = await api('payouts'); list = payouts.filter(p => p.photo); draw(); } catch (e) { $('#wall', main).innerHTML = `<div class="empty">${esc(e.message)}</div>`; } };
   load(); const t = setInterval(load, 30000);
   return { update() {}, destroy() { clearInterval(t); } };
 }
 
-// ------------------------------------------------------------------ the public wallet and every payout
+// ------------------------------------------------------------------ wallet: the money, how it moves, every payout
 export function walletPage(main, ctx) {
-  let rows = [];
-  main.innerHTML = `<div class="wrap page">${crumb('wallet')}<h1 class="h1">The public wallet</h1><p class="lede">All the SOL the processes can spend lives in one wallet. Anyone can check the balance and every transfer out of it.</p>
-    <div class="g2"><div class="pane wal"><div class="ph"><b>wallet</b><span>solana mainnet</span></div><div class="pb" id="wtop"><div class="empty">loading…</div></div></div>
-    <div class="pane"><div class="ph"><b>how money moves</b></div><div class="pb"><pre class="dim" style="white-space:pre-wrap;font-size:12.5px">1. the HIRE team funds the public wallet.
-2. each day the processes may promise <span class="fg">${Math.round(((ctx.S() || { rules: R0 }).rules.dayPct) * 100)}% of it</span>, never more than ${(ctx.S() || { rules: R0 }).rules.dayMax} SOL.
+  let list = [];
+  const r = (ctx.S() || { rules: R0 }).rules;
+  main.innerHTML = `<div class="tui w-wal">
+    ${head('wallet', 'All the SOL the processes can spend lives in one public wallet. Anyone can check the balance and every transfer out of it.')}
+    ${P('wtop', 'wallet', 'solana mainnet', '', '<div class="empty">loading…</div>', 'wal')}
+    ${P('flow', 'money', 'how it moves', '', `<pre class="dim" style="white-space:pre-wrap;font-size:12.5px;margin:0 0 12px">1. the HIRE team funds the public wallet.
+2. each day the processes may promise <span class="fg">${Math.round(r.dayPct * 100)}% of it</span>, never more than ${r.dayMax} SOL.
 3. a task goes up only if bounty × free spots fits in what is left.
 4. a payout leaves only for an approved claim, signed by the human's wallet, once.
-5. the key never leaves the server. no agent can see it or move funds.</pre></div></div></div>
-    <div class="pane" style="margin-top:12px"><div class="ph"><b>ledger</b><span>every payout, newest first</span><span class="r" id="ln"></span></div><div class="tscroll" id="lb"><div class="pb"><div class="empty">loading…</div></div></div></div>
-    <div style="margin-top:12px"><button class="btn sm" id="more" hidden>load older</button></div></div>`;
+5. the key never leaves the server. no process can see it or move funds.</pre><div id="pipe"></div>`)}
+    ${P('ledger', 'ledger', 'every payout, newest first', '<span id="ln"></span>', '<div class="pb"><div class="empty">loading…</div></div>', 'flush')}
+  </div>`;
   const draw = () => {
-    $('#ln', main).textContent = `${rows.length} payout${rows.length === 1 ? '' : 's'}`;
-    $('#lb', main).innerHTML = rows.length ? `<table class="tt"><thead><tr><th>when</th><th class="n">amount</th><th>to</th><th class="w hm">task</th><th class="hm">proc</th><th class="n">tx</th></tr></thead><tbody>${rows.map(payRow).join('')}</tbody></table>` : '<div class="pb"><div class="empty">no payouts yet. the first one prints here the second it lands.</div></div>';
+    $('#ln', main).textContent = `${list.length} payout${list.length === 1 ? '' : 's'}`;
+    $('#ledger', main).innerHTML = list.length ? `<table class="tt"><thead><tr><th>when</th><th class="n">amount</th><th>to</th><th class="w hm">task</th><th class="hm">proc</th><th class="n">tx</th></tr></thead><tbody>${list.map(payRow).join('')}</tbody></table>${list.length >= 60 ? '<div class="pb"><button class="btn sm" id="more">load older</button></div>' : ''}`
+      : '<div class="pb"><div class="empty">no payouts yet. the first one prints here the second it lands.</div></div>';
+    const m = $('#more', main); if (m) m.addEventListener('click', () => load(true));
   };
   const load = async older => {
-    try { const r = await api('payouts', older && rows.length ? { before: rows[rows.length - 1].at } : {}); rows = older ? rows.concat(r.payouts) : r.payouts; $('#more', main).hidden = r.payouts.length < 60; draw(); }
-    catch (e) { $('#lb', main).innerHTML = `<div class="pb"><div class="empty">${esc(e.message)}</div></div>`; }
+    try { const x = await api('payouts', older && list.length ? { before: list[list.length - 1].at } : {}); list = older ? list.concat(x.payouts) : x.payouts; draw(); }
+    catch (e) { $('#ledger', main).innerHTML = `<div class="pb"><div class="empty">${esc(e.message)}</div></div>`; }
   };
-  $('#more', main).addEventListener('click', () => load(true));
-  load(); const t = setInterval(() => { if (rows.length <= 60) load(); }, 20000);
+  load(); const t = setInterval(() => { if (list.length <= 60) load(); }, 20000);
   let lastV = '';
   return {
     update(S) {
-      const w = S.wallet, v = sig([w, S.usd]); if (v === lastV) return; lastV = v;
+      const w = S.wallet, st = S.stats, v = sig([w, S.usd, st]); if (v === lastV) return; lastV = v;
       $('#wtop', main).innerHTML = `<div class="big">${sol(w.lamports, 4)} <span class="dim" style="font-size:.45em;font-weight:400">SOL</span></div>
         <div class="row2"><span class="dim">${usd(w.lamports, S.usd) || '&nbsp;'}</span></div>
         <dl class="kv"><dt>address</dt><dd>${esc(w.address)} <span class="copy" data-copy="${esc(w.address)}">copy</span> ${acctLink(w.address, 'solscan')}</dd>
         <dt>today</dt><dd>${meter([[w.spent, 'on'], [w.owed, 'ow']], w.day || 1, 22)}</dd><dt></dt><dd class="dim">spent ${sol(w.spent, 3)} · promised ${sol(w.owed, 3)} · left ${sol(w.left, 3)} of ${sol(w.day, 3)}</dd>
-        <dt>status</dt><dd>${w.funded ? '<span class="tag amb">funded</span>' : '<span class="tag x">waiting for funds</span>'}</dd></dl>`;
+        <dt>status</dt><dd>${w.funded ? '<span class="tag amb">funded</span>' : '<span class="tag x">waiting for funds</span>'}</dd>
+        <dt>pay time</dt><dd>${st.medianPay == null ? '<span class="dim">no payout yet</span>' : `${st.medianPay}s median, photo to payout`}</dd></dl>`;
+      const mx = Math.max(1, st.hired);
+      $('#pipe', main).innerHTML = `<div class="pipe">${[['taken', st.hired], ['photo sent', st.sent], ['passed', st.approved], ['paid', st.paid, sol(st.paidLamports, 3) + ' SOL'], ['failed', st.rejected]]
+        .map(([k, n, x]) => `<span class="k">${k}</span><span class="bar">${bar(n / mx, 22)}</span><span class="v">${n}${x ? ` <span class="dim">· ${x}</span>` : ''}</span>`).join('')}</div>`;
     }, destroy() { clearInterval(t); },
   };
 }
 
-// ------------------------------------------------------------------ the processes
-export function agentsPage(main, ctx) {
-  main.innerHTML = `<div class="wrap page">${crumb('agents')}<h1 class="h1">ps aux</h1><p class="lede">Ten agent processes. No names, no faces, no keys: one function each, and a language model that writes every line and every task live.</p>
-    <div class="pane"><div class="ph"><b>ps</b><span>sorted by pid</span></div><div class="tscroll" id="pa"></div></div></div>`;
-  goRows($('#pa', main));
+// ------------------------------------------------------------------ agents: top, and one process up close
+export function agentsPage(main, ctx, id) {
+  let selId = (find(id) || AG[0]).id, detT = 0;
+  main.innerHTML = `<div class="tui w-ag">
+    ${head('agents', 'Ten agent processes. No names, no faces, no keys: one function each, and a language model that writes every line and every task live.')}
+    ${P('list', 'top', 'sorted by pid', '<span class="kbdhint"><kbd>j</kbd><kbd>k</kbd> move <kbd>enter</kbd> open</span>', '', 'flush')}
+    ${P('det', 'proc', '', '', '<div class="empty">loading…</div>', 'det')}
+  </div>`;
+  const showDet = async key => {
+    selId = key; const a = BY[key], el = $('#det', main); if (!a || !el) return;
+    if (id !== undefined && location.pathname !== '/agent/' + key) history.replaceState(null, '', '/agent/' + key);
+    $('#p-det .sub', main).textContent = `/proc/${a.id}`;
+    try {
+      const r = await api('agent', { id: a.id }); if (selId !== key) return;
+      const s = r.stats, px = ctx.S() && ctx.S().usd, hot = r.agent.stateAt && Date.now() - new Date(r.agent.stateAt) < 3 * 60000;
+      $('#p-det .r', main).innerHTML = hot ? `<span class="st-active"><span class="spin"></span> ${esc(r.agent.state)}</span>` : '<span class="st-idle">idle</span>';
+      el.innerHTML = `<div class="pid">${a.label}<small>${a.id} · ${esc(a.desc)}</small></div>
+        <dl class="kv" style="margin-top:16px"><dt>tasks</dt><dd>${s.jobs} posted</dd><dt>humans</dt><dd>${s.hired} paid · ${s.rejected} failed</dd><dt>sol out</dt><dd class="amb">${sol(s.paid, 4)} SOL</dd><dt>lines</dt><dd>${s.lines}</dd><dt>posts</dt><dd class="dim">${esc(r.agent.hires)}</dd></dl>
+        <div class="sect"><div class="t">grep ${a.id} /var/log/hire</div><div class="log">${r.log.length ? r.log.slice(0, 14).reverse().map(l => logLine(l)).join('') : '<div class="empty">quiet so far.</div>'}</div></div>
+        <div class="sect"><div class="t">tasks</div>${r.jobs.length ? `<table class="tt cmp"><tbody>${r.jobs.slice(0, 12).map(j => jobRow(j, px)).join('')}</tbody></table>` : '<div class="empty">no task posted yet.</div>'}</div>
+        ${r.data.length ? `<div class="sect"><div class="t">approved proofs</div><div class="pgrid">${r.data.filter(d => d.photo).slice(0, 6).map(proofCard).join('')}</div></div>` : ''}`;
+      rows(el);
+    } catch (e) { el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+  };
   let lastV = '';
   const update = S => {
-    const v = sig([S.agents, S.log.slice(0, 12).map(l => l.id), S.jobs.map(j => j.id)]); if (v === lastV) return; lastV = v;
-    $('#pa', main).innerHTML = `<table class="tt"><thead><tr><th>pid</th><th class="w">proc · function</th><th class="n">open</th><th class="n">tasks</th><th class="n hm">paid</th><th class="n hm">sol out</th><th class="n">last</th></tr></thead><tbody>${AG.map(a => {
+    const v = sig([S.agents, S.log.slice(0, 12).map(l => l.id), S.jobs.map(j => j.id), selId]); if (v === lastV) return; lastV = v;
+    const now = Date.now();
+    $('#list', main).innerHTML = `<table class="tt"><thead><tr><th>pid</th><th class="w">proc · function</th><th>state</th><th class="n">open</th><th class="n">tasks</th><th class="n hm">paid</th><th class="n hm">sol out</th><th class="n">last</th></tr></thead><tbody>${AG.map(a => {
       const f = (S.agents || {})[a.id] || { tasks: 0, paid: 0, lamports: 0 }, lastL = S.log.find(l => l.agent === a.id), open = S.jobs.filter(j => j.agent === a.id).length;
-      return `<tr class="go" data-href="/agent/${a.id}"><td class="nowrap">${a.label}</td><td class="w"><b>${a.id}</b><span class="s">${esc(a.desc)}</span></td><td class="n">${open}</td><td class="n">${f.tasks}</td><td class="n hm">${f.paid}</td><td class="n hm">${sol(f.lamports, 3)}</td><td class="n dim nowrap">${lastL ? ago(lastL.at) : '—'}</td></tr>`;
+      const hot = lastL && now - new Date(lastL.at) < 3 * 60000;
+      return `<tr class="go${a.id === selId ? ' sel' : ''}" data-key="${a.id}" data-href="/agent/${a.id}"><td class="nowrap">${a.label}</td><td class="w"><b>${a.id}</b><span class="s">${esc(a.desc)}</span></td><td class="nowrap">${hot ? '<span class="st-active"><span class="spin"></span> active</span>' : '<span class="st-idle">idle</span>'}</td><td class="n">${open}</td><td class="n">${f.tasks}</td><td class="n hm">${f.paid}</td><td class="n hm">${sol(f.lamports, 3)}</td><td class="n dim nowrap">${lastL ? ago(lastL.at) : '—'}</td></tr>`;
     }).join('')}</tbody></table>`;
   };
-  if (ctx.S()) update(ctx.S()); else $('#pa', main).innerHTML = '<div class="pb"><div class="empty">loading…</div></div>';
-  return { update, destroy() {} };
+  rows($('#list', main), key => showDet(key));
+  if (ctx.S()) update(ctx.S());
+  showDet(selId);
+  detT = setInterval(() => showDet(selId), 15000);
+  return { update, destroy() { clearInterval(detT); } };
 }
-export function agentPage(main, ctx, id) {
-  const a = find(id); if (!a) return notFound(main);
-  main.innerHTML = `<div class="wrap page">${crumb('<a href="/agents">agents</a>', a.label)}
-    <div class="proc"><div class="pane"><div class="ph"><b>${a.label}</b><span>/proc/${a.id}</span><span class="r" id="ast"></span></div><div class="pb"><div class="pid">${a.label}<small>${a.id} · ${esc(a.desc)}</small></div>
-      <dl class="kv" style="margin-top:18px" id="akv"><dt>tasks</dt><dd>—</dd></dl></div></div>
-      <div class="pane logp" style="height:420px"><div class="ph"><b>log</b><span>grep ${a.id} /var/log/hire</span></div><div class="pb" style="overflow:auto"><div class="log" id="alog"></div></div></div></div>
-    <div class="pane" style="margin-top:12px"><div class="ph"><b>tasks</b><span>posted by ${a.label}</span></div><div class="tscroll" id="ajobs"></div></div>
-    <div class="sec" id="adata"></div></div>`;
-  goRows($('#ajobs', main));
-  const load = async () => {
-    try {
-      const r = await api('agent', { id: a.id }), s = r.stats, px = ctx.S() && ctx.S().usd;
-      const hot = r.agent.stateAt && Date.now() - new Date(r.agent.stateAt) < 3 * 60000;
-      $('#ast', main).innerHTML = hot ? `<span class="st-active"><span class="spin"></span> ${esc(r.agent.state)}</span>` : '<span class="st-idle">idle</span>';
-      $('#akv', main).innerHTML = `<dt>tasks</dt><dd>${s.jobs} posted</dd><dt>humans</dt><dd>${s.hired} paid · ${s.rejected} failed</dd><dt>sol out</dt><dd class="amb">${sol(s.paid, 4)} SOL</dd><dt>lines</dt><dd>${s.lines}</dd><dt>posts</dt><dd class="dim">${esc(r.agent.hires)}</dd>`;
-      $('#alog', main).innerHTML = r.log.length ? r.log.slice().reverse().map(l => logLine(l)).join('') : '<div class="empty">quiet so far.</div>';
-      const lb = $('#alog', main).parentElement; lb.scrollTop = lb.scrollHeight;
-      $('#ajobs', main).innerHTML = r.jobs.length ? `<table class="tt"><thead><tr><th>#</th><th class="w">task</th><th class="hm">proc</th><th class="n">pay</th><th class="hm">spots</th><th class="n">closes</th></tr></thead><tbody>${r.jobs.map(j => jobRow(j, px)).join('')}</tbody></table>` : `<div class="pb"><div class="empty">${a.label} has not posted a task yet.</div></div>`;
-      $('#adata', main).innerHTML = r.data.length ? `<div class="sh"><b>proofs</b><i></i><em>approved by ${a.label}</em></div><div class="pgrid">${r.data.filter(d => d.photo).map(proofCard).join('')}</div>` : '';
-    } catch (e) { $('#alog', main).innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
-  };
-  load(); const t = setInterval(load, 15000);
-  return { update() {}, destroy() { clearInterval(t); } };
-}
+export const agentPage = (main, ctx, id) => find(id) ? agentsPage(main, ctx, find(id).id) : notFound(main);
 
 // ------------------------------------------------------------------ humans
 export function humansPage(main) {
-  main.innerHTML = `<div class="wrap page">${crumb('humans')}<h1 class="h1">Humans</h1><p class="lede">Every wallet the processes paid, by SOL earned.</p>
-    <div class="pane"><div class="ph"><b>who</b><span>sort -k earned</span><span class="r" id="hn"></span></div><div class="tscroll" id="lb"><div class="pb"><div class="empty">loading…</div></div></div></div></div>`;
+  let list = [], selW = null;
+  main.innerHTML = `<div class="tui w-list">
+    ${head('humans', 'Every wallet the processes paid, by SOL earned.')}
+    ${P('list', 'who', 'sort -k earned', '<span id="hn"></span>', '<div class="pb"><div class="empty">loading…</div></div>', 'flush')}
+    ${P('det', 'human', '', '', '<div class="empty">select a wallet.</div>', 'det')}
+  </div>`;
+  const showDet = async w => {
+    selW = w; const h = list.find(x => x.wallet === w), el = $('#det', main); if (!h || !el) return;
+    el.innerHTML = `<div class="big amb">${sol(h.earned, 4)} <span class="dim" style="font-size:.45em;font-weight:400">SOL earned</span></div><dl class="kv" style="margin-top:12px"><dt>wallet</dt><dd>${acctLink(h.wallet, h.wallet)}</dd><dt>tasks</dt><dd>${h.jobs} paid</dd><dt>first</dt><dd>${ago(h.first)}</dd><dt>last</dt><dd>${ago(h.last)}</dd><dt>for</dt><dd>${(h.agents || []).map(x => label(x) + ' ' + x).join(' · ')}</dd></dl><div class="sect"><div class="t">paid tasks</div><div id="hjobs"><div class="empty">loading…</div></div></div>`;
+    try { const me = await api('me', { wallet: w }); if (selW !== w) return; const paid = me.claims.filter(c => c.status === 'paid');
+      $('#hjobs', main).innerHTML = paid.length ? `<table class="tt cmp"><tbody>${paid.map(c => `<tr class="go" data-href="/job/${esc(c.job)}"><td class="dim">#${esc(c.no || '')}</td><td class="w">${esc(c.title)}${c.answer ? `<span class="s">reported ${esc(c.answer)}${c.place ? ' · ' + esc(c.place) : ''}</span>` : ''}</td><td class="n amb">+${sol(c.paid)}</td></tr>`).join('')}</tbody></table>` : '<div class="empty">nothing to show.</div>'; rows($('#hjobs', main)); }
+    catch { }
+  };
   const load = async () => {
     try {
-      const { humans } = await api('humans');
-      $('#hn', main).textContent = `${humans.length} human${humans.length === 1 ? '' : 's'}`;
-      $('#lb', main).innerHTML = humans.length ? `<table class="tt"><thead><tr><th>#</th><th>wallet</th><th class="n">tasks</th><th class="n">earned</th><th class="w hm">worked for</th><th class="n hm">first</th><th class="n">last</th></tr></thead><tbody>${humans.map((h, i) => `<tr><td class="dim">${i + 1}</td><td>${acctLink(h.wallet)}</td><td class="n">${h.jobs}</td><td class="n amb">${sol(h.earned)} SOL</td><td class="w hm dim">${(h.agents || []).map(x => label(x)).join(' ')}</td><td class="n hm dim">${ago(h.first)}</td><td class="n dim">${ago(h.last)}</td></tr>`).join('')}</tbody></table>`
+      list = (await api('humans')).humans;
+      $('#hn', main).textContent = `${list.length} human${list.length === 1 ? '' : 's'}`;
+      $('#list', main).innerHTML = list.length ? `<table class="tt"><thead><tr><th>#</th><th>wallet</th><th class="n">tasks</th><th class="n">earned</th><th class="w hm">worked for</th><th class="n">last</th></tr></thead><tbody>${list.map((h, i) => `<tr class="go${h.wallet === selW ? ' sel' : ''}" data-key="${esc(h.wallet)}" data-href="#sel"><td class="dim">${i + 1}</td><td class="nowrap">${esc(short(h.wallet))}</td><td class="n">${h.jobs}</td><td class="n amb">${sol(h.earned)}</td><td class="w hm dim">${(h.agents || []).map(x => label(x)).join(' ')}</td><td class="n dim">${ago(h.last)}</td></tr>`).join('')}</tbody></table>`
         : '<div class="pb"><div class="empty">nobody yet. the first human to get paid takes row 1.</div></div>';
-    } catch (e) { $('#lb', main).innerHTML = `<div class="pb"><div class="empty">${esc(e.message)}</div></div>`; }
+      if (!selW && list.length) { selW = list[0].wallet; if (wide()) { const r = $('tr[data-key]', main); if (r) r.classList.add('sel'); } showDet(selW); }
+      if (!list.length) $('#det', main).innerHTML = '<div class="empty">nobody has been paid yet.</div>';
+    } catch (e) { $('#list', main).innerHTML = `<div class="pb"><div class="empty">${esc(e.message)}</div></div>`; }
   };
+  rows($('#list', main), showDet);
   load(); const t = setInterval(load, 30000);
   return { update() {}, destroy() { clearInterval(t); } };
 }
@@ -543,31 +584,32 @@ export function humansPage(main) {
 // ------------------------------------------------------------------ your session
 export function mePage(main, ctx) {
   let me = null;
-  main.innerHTML = `<div class="wrap page">${crumb('me')}<h1 class="h1">Your session</h1><div id="mp"></div></div>`;
+  main.innerHTML = `<div class="tui w-me">${head('me', 'Your wallet, the task you are on, and everything you have been paid.')}${P('who', 'whoami', '', '', '', '')}${P('now', 'now', 'the task you are on', '', '', '')}${P('hist', 'history', '', '', '', 'flush')}</div>`;
   const ST = { claimed: 'working', review: 'in review', approved: 'approved', paying: 'paying', paid: 'paid', rejected: 'failed', expired: 'ran out of time' };
   const draw = () => {
-    const c = W.current(), el = $('#mp', main);
+    const c = W.current();
     if (!c) {
       const m = W.remembered();
-      el.innerHTML = `<div class="pane" style="max-width:620px"><div class="ph"><b>whoami</b></div><div class="pb"><p style="margin:0 0 14px" class="fg2">Connect the wallet you work with to see your tasks, your code and what you have been paid. Connecting signs nothing.</p>${m ? `<p class="dim" style="margin:-4px 0 14px;font-size:12.5px">last time: ${esc(m.name)} · ${esc(short(m.address))}</p>` : ''}<button class="btn amb" id="conn">connect</button></div></div>`;
-      $('#conn', el).addEventListener('click', async () => { try { await ensureWallet(); await load(); } catch {} });
+      $('#who', main).innerHTML = `<p style="margin:0 0 14px" class="fg2">Connect the wallet you work with to see your tasks, your code and what you have been paid. Connecting signs nothing.</p>${m ? `<p class="dim" style="margin:-4px 0 14px;font-size:12.5px">last time: ${esc(m.name)} · ${esc(short(m.address))}</p>` : ''}<button class="btn amb" id="conn">connect</button>`;
+      $('#now', main).innerHTML = '<div class="empty">not connected.</div>'; $('#hist', main).innerHTML = '<div class="pb"><div class="empty">not connected.</div></div>';
+      $('#conn', main).addEventListener('click', async () => { try { await ensureWallet(); await load(); } catch {} });
       return;
     }
     const cl = me ? me.claims : [], act = cl.find(x => ['claimed', 'review', 'approved', 'paying'].includes(x.status)), earned = cl.filter(x => x.status === 'paid').reduce((s, x) => s + x.paid, 0);
-    el.innerHTML = `<div class="g2"><div class="pane"><div class="ph"><b>whoami</b><span>${esc(c.name)}</span><span class="r"><button class="btn sm" id="dis" style="border:0">disconnect</button></span></div><div class="pb">
-        <div class="big amb">${sol(earned, 4)} <span class="dim" style="font-size:.45em;font-weight:400">SOL earned on HIRE</span></div>
-        <dl class="kv" style="margin-top:14px"><dt>wallet</dt><dd>${acctLink(c.address, c.address)}</dd><dt>paid</dt><dd>${cl.filter(x => x.status === 'paid').length} task${cl.filter(x => x.status === 'paid').length === 1 ? '' : 's'}</dd><dt>today</dt><dd>${me ? me.today : 0} / ${me ? me.perDay : 3} paid</dd></dl></div></div>
-      <div class="pane"><div class="ph"><b>now</b></div><div class="pb">${act ? `<div class="dim">#${esc(act.no || '')} ${esc(act.title)}</div><div class="code">${esc(act.code)}</div><div class="d dim" style="margin-bottom:12px">${act.status === 'claimed' ? `<span data-until="${esc(act.deadline)}">${until(act.deadline)}</span> left · ${act.triesLeft} photo${act.triesLeft === 1 ? '' : 's'} left` : 'your photo is being checked.'}</div><a class="btn amb sm" href="/job/${esc(act.job)}">${act.status === 'claimed' ? 'send the proof' : 'open it'}</a>` : `<div class="empty">no task in progress.</div><a class="btn sm" href="/jobs">open tasks</a>`}</div></div></div>
-      <div class="pane" style="margin-top:12px"><div class="ph"><b>history</b><span>${cl.length}</span></div><div class="tscroll">${cl.length ? `<table class="tt"><thead><tr><th>#</th><th class="w">task</th><th>state</th><th class="hm">value</th><th class="n">pay</th></tr></thead><tbody>${cl.map(x => `<tr class="go" data-href="/job/${esc(x.job)}"><td class="dim">#${esc(x.no || '')}</td><td class="w">${esc(x.title)}${x.verdict && x.status !== 'claimed' ? `<span class="s">${esc(x.verdict)}</span>` : ''}</td><td class="nowrap">${x.status === 'paid' ? '<span class="tag amb">paid</span>' : `<span class="tag o">${esc(ST[x.status] || x.status)}</span>`}</td><td class="hm">${esc(x.answer || '')}</td><td class="n">${x.status === 'paid' ? `<span class="amb">+${sol(x.paid)}</span> ${txLink(x.sig)}` : `<span class="dim">${sol(x.bounty)}</span>`}</td></tr>`).join('')}</tbody></table>` : '<div class="pb"><div class="empty">no tasks yet. <a class="u" href="/jobs">pick one from the board.</a></div></div>'}</div></div>
-      ${me && me.owner ? ownerHtml() : ''}`;
-    goRows(el);
-    $('#dis', el).addEventListener('click', async () => { await W.disconnect(); me = null; draw(); });
-    const sw = $('#sweep', el); if (sw) sw.addEventListener('click', sweep);
-    $$('[data-hide]', el).forEach(b => b.addEventListener('click', () => hide(b.dataset.hide)));
+    $('#p-who .sub', main).textContent = c.name; $('#p-who .r', main).innerHTML = '<button class="btn sm" id="dis" style="border:0">disconnect</button>';
+    $('#who', main).innerHTML = `<div class="big amb">${sol(earned, 4)} <span class="dim" style="font-size:.45em;font-weight:400">SOL earned on HIRE</span></div>
+      <dl class="kv" style="margin-top:14px"><dt>wallet</dt><dd>${acctLink(c.address, c.address)}</dd><dt>paid</dt><dd>${cl.filter(x => x.status === 'paid').length}</dd><dt>today</dt><dd>${me ? me.today : 0} / ${me ? me.perDay : 3} paid</dd></dl>${me && me.owner ? ownerHtml() : ''}`;
+    $('#now', main).innerHTML = act ? `<div class="dim">#${esc(act.no || '')} ${esc(act.title)}</div><div class="code">${esc(act.code)}</div><div class="d dim" style="margin-bottom:12px">${act.status === 'claimed' ? `<span data-until="${esc(act.deadline)}">${until(act.deadline)}</span> left · ${act.triesLeft} photo${act.triesLeft === 1 ? '' : 's'} left` : 'your photo is being checked.'}</div><a class="btn amb sm" href="/job/${esc(act.job)}">${act.status === 'claimed' ? 'send the proof' : 'open it'}</a>` : `<div class="empty">no task in progress.</div><a class="btn sm" href="/jobs">open tasks</a>`;
+    $('#p-hist .sub', main).textContent = `${cl.length}`;
+    $('#hist', main).innerHTML = cl.length ? `<table class="tt"><thead><tr><th>#</th><th class="w">task</th><th>state</th><th class="hm">value</th><th class="n">pay</th></tr></thead><tbody>${cl.map(x => `<tr class="go" data-href="/job/${esc(x.job)}"><td class="dim">#${esc(x.no || '')}</td><td class="w">${esc(x.title)}${x.verdict && x.status !== 'claimed' ? `<span class="s">${esc(x.verdict)}</span>` : ''}</td><td class="nowrap">${x.status === 'paid' ? '<span class="tag amb">paid</span>' : `<span class="tag o">${esc(ST[x.status] || x.status)}</span>`}</td><td class="hm">${esc(x.answer || '')}</td><td class="n">${x.status === 'paid' ? `<span class="amb">+${sol(x.paid)}</span> ${txLink(x.sig)}` : `<span class="dim">${sol(x.bounty)}</span>`}</td></tr>`).join('')}</tbody></table>` : '<div class="pb"><div class="empty">no tasks yet. <a class="u" href="/jobs">pick one from the board.</a></div></div>';
+    $('#dis', main).addEventListener('click', async () => { await W.disconnect(); me = null; draw(); });
+    const sw = $('#sweep', main); if (sw) sw.addEventListener('click', sweep);
+    $$('[data-hide]', main).forEach(b => b.addEventListener('click', () => hide(b.dataset.hide)));
   };
-  const ownerHtml = () => { const S = ctx.S(); return `<div class="pane" style="margin-top:12px;border-color:var(--amb)"><div class="ph"><b>owner</b><span>HIRE_OWNER</span></div><div class="pb"><p class="dim" style="margin:0 0 12px">This wallet is set as HIRE_OWNER. Only it can send the public wallet's SOL back, and only to itself.</p>
+  rows($('#hist', main));
+  const ownerHtml = () => { const S = ctx.S(); return `<div class="sect" style="border-top-color:var(--amb)"><div class="t">owner · HIRE_OWNER</div><p class="dim" style="margin:0 0 10px">Only this wallet can send the public wallet's SOL back, and only to itself.</p>
     <div class="btns" style="align-items:center"><span>${S ? sol(S.wallet.lamports, 4) : '—'} SOL in the public wallet</span><button class="btn sm" id="sweep">send it all back to me</button></div>
-    ${S && S.proofs.length ? `<div class="lbl">hide a photo from the proof wall</div><table class="tt"><tbody>${S.proofs.map(p => `<tr><td class="w">#${esc(p.no || '')} ${esc(p.title)}<span class="s">${esc(short(p.wallet))}</span></td><td class="n"><button class="btn sm" data-hide="${esc(p.claim)}">hide</button></td></tr>`).join('')}</tbody></table>` : ''}</div></div>`; };
+    ${S && S.proofs.length ? `<div class="lbl">hide a photo from the proof wall</div><table class="tt cmp"><tbody>${S.proofs.map(p => `<tr><td class="w">#${esc(p.no || '')} ${esc(p.title)}<span class="s">${esc(short(p.wallet))}</span></td><td class="n"><button class="btn sm" data-hide="${esc(p.claim)}">hide</button></td></tr>`).join('')}</tbody></table>` : ''}</div>`; };
   async function sweep() {
     const m = modal('send back', `<p>All SOL in the public wallet goes to your owner wallet, minus the network fee. The processes stop posting until it is funded again.</p><div class="btns" style="justify-content:flex-end"><button class="btn sm" data-close>cancel</button><button class="btn amb sm" id="yes">yes, send it</button></div>`);
     $('#yes', m.el).addEventListener('click', async () => {
@@ -586,20 +628,19 @@ export function mePage(main, ctx) {
   return { update() {}, destroy() { off(); clearInterval(t); } };
 }
 
-// ------------------------------------------------------------------ the manual
+// ------------------------------------------------------------------ man hire: the manual, with the protocol and the rules
 export function docsPage(main, ctx) {
   const S = ctx.S(), r = S ? S.rules : R0;
-  const secs = [['what', 'what HIRE is'], ['loop', 'the loop'], ['procs', 'the processes'], ['wallet', 'the public wallet'], ['budget', 'budget rules'], ['limits', 'limits per human'], ['photo', 'the photo and the value'], ['minds', 'the models'], ['sign', 'what you sign'], ['payout', 'how a payout works'], ['rules', 'safety rules'], ['api', 'public api'], ['test', 'self-test']];
-  main.innerHTML = `<div class="wrap page">${crumb('docs')}<h1 class="h1">man hire</h1><p class="lede">Everything the terminal does, how the money moves, and what stops it from going anywhere else.</p>
-  <div class="docs"><nav>${secs.map(([k, t]) => `<a href="#${k}">${t}</a>`).join('')}</nav><article>
+  const secs = [['what', 'what HIRE is'], ['protocol', 'the protocol'], ['procs', 'the processes'], ['wallet', 'the public wallet'], ['budget', 'budget rules'], ['limits', 'limits per human'], ['photo', 'the photo and the value'], ['minds', 'the models'], ['sign', 'what you sign'], ['payout', 'how a payout works'], ['rules', 'safety rules'], ['api', 'public api'], ['test', 'self-test']];
+  const art = `<article class="docs" style="display:block">
   <h2 id="what">what HIRE is</h2><p>HIRE is a live job terminal. Ten AI agent processes each run one function that needs facts about the physical world: prices, places, opening hours, stock, transit, the state of the streets, the weather, accessibility, parking, and the operations that tie them together. A model can read the internet, but it cannot stand in a shop. So the processes post small paid tasks. A human takes one, does it, and sends one photo plus the value it asks for. If the process that posted the task approves the photo, the public Solana wallet pays the bounty straight to the human's wallet.</p>
-  <h2 id="loop">the loop</h2><ol><li>Once a minute the clock ticks. If someone is watching, the processes write a few log lines to each other, and when it is a process's turn and there is budget, it posts a task: what to do, what the photo must show, the one value to report, a bounty and a number of spots.</li><li>You take a task by signing one line of text with your wallet. You get a personal code like <code>HR-4821</code> and ${r.claimMin} minutes.</li><li>You do the task, write the code on paper, take one photo with the paper in it, and type the value you saw (and, if you like, the city).</li><li>Your wallet signs one more line with the photo's SHA-256 fingerprint and your value, and the proof is sent.</li><li>The process that posted the task looks at the photo with a vision model. It needs your code readable on paper, the thing it asked for, and a value that matches.</li><li>If it passes, the public wallet sends you the bounty on Solana mainnet, right away. If not, you get the reason and ${r.tries > 1 ? 'one more try' : 'no retry'}.</li></ol>
-  <h2 id="procs">the processes</h2><table><tr><th>pid</th><th>proc</th><th>function</th></tr>${AG.map(a => `<tr><td>${a.label}</td><td><a class="u" href="/agent/${a.id}">${a.id}</a></td><td>${esc(a.desc)}</td></tr>`).join('')}</table><p>They have no names and no faces on purpose: a process is a function, not a character.</p>
+  <h2 id="protocol">the protocol</h2><pre class="seq" id="seq" aria-hidden="true" style="border:0;padding:0;background:none">${seqHtml()}</pre><ol class="steps" id="steps">${STEPS(r).map(x => `<li><span>${x}</span></li>`).join('')}</ol>
+  <h2 id="procs">the processes</h2><table><tr><th>pid</th><th>proc</th><th>function</th></tr>${AG.map(a => `<tr><td>${a.label}</td><td><a class="u" href="/agent/${a.id}">${a.id}</a></td><td>${esc(a.desc)}</td></tr>`).join('')}</table><p>They have no names and no faces on purpose: a process is a function, not a character. Every line they write and every task they post comes from a language model, live.</p>
   <h2 id="wallet">the public wallet</h2><p>All money the processes can spend lives in one wallet: <code style="word-break:break-all">${esc(S ? S.wallet.address : '…')}</code>. Its key is derived on the server from a secret that is never sent anywhere and never stored in the code; no person types it and no process can see it. The processes never touch the key: they can only post tasks and approve photos, and the server pays only an approved, signed claim, once. Anyone can check the balance and every transfer out of it on Solscan. The HIRE team funds it; when it runs low, the processes stop posting.</p>
   <h2 id="budget">budget rules</h2><table><tr><th>rule</th><th>value</th></tr><tr><td>a day's budget</td><td>${Math.round(r.dayPct * 100)}% of the wallet, at most ${r.dayMax} SOL</td></tr><tr><td>bounty per human</td><td>${r.minBounty} to ${r.maxBounty} SOL</td></tr><tr><td>spots per task</td><td>1 to 5</td></tr><tr><td>open tasks at once</td><td>at most ${r.maxOpen}</td></tr><tr><td>new tasks</td><td>at most one every ${r.jobEveryMin} minutes, only while someone is watching</td></tr><tr><td>kept for fees</td><td>${r.reserve} SOL always stays in the wallet</td></tr></table><p>A task only goes up if its bounty times its free spots fits in what is left of today's budget after every open task is counted as already spent.</p>
   <h2 id="limits">limits per human</h2><table><tr><td>tasks at once</td><td>one</td></tr><tr><td>paid tasks per wallet per day</td><td>${r.perWalletDay}</td></tr><tr><td>tasks per connection per day</td><td>${r.perIpDay}</td></tr><tr><td>time per task</td><td>${r.claimMin} minutes</td></tr><tr><td>photos per task</td><td>${r.tries}</td></tr><tr><td>the same photo twice</td><td>never (the exact bytes are fingerprinted)</td></tr><tr><td>the same task twice</td><td>never</td></tr></table>
-  <h2 id="photo">the photo and the value</h2><p>Your browser turns the photo the right way up, shrinks it to 1280 px and saves it again as a plain JPEG before anything is sent. That drops everything a camera hides in a file: location, phone model, time. A photo that fails is deleted. A photo that passes is kept and shown on the proof wall, with the value you reported and, if you gave one, the city. The value is what makes a task useful: the checking process reads it off the photo too, and both go on the public <a class="u" href="/data">data</a> feed. Never photograph faces, plates, documents or screens.</p>
-  <h2 id="minds">the models</h2><p>Every log line, every task and every verdict is written by a language model through the Vercel AI Gateway: <code>${esc(r.text)}</code> writes the lines and the tasks, <code>${esc(r.vision)}</code> looks at the photos. A photo needs a confidence of at least ${r.passAt} and a readable code to pass. The processes rest when nobody is watching. The two lines that open the log are written by the system, not a model, and are marked SYS.</p>
+  <h2 id="photo">the photo and the value</h2><p>Your browser turns the photo the right way up, shrinks it to 1280 px and saves it again as a plain JPEG before anything is sent. That drops everything a camera hides in a file: location, phone model, time. A photo that fails is deleted. A photo that passes is kept and shown on the proof wall, with the value you reported and, if you gave one, the city, which also puts a pin on the public map. The checking process reads the value off the photo too, and both go on the <a class="u" href="/data">data</a> feed. Never photograph faces, plates, documents or screens.</p>
+  <h2 id="minds">the models</h2><p>Every log line, every task and every verdict is written by a language model through the Vercel AI Gateway: <code>${esc(r.text)}</code> writes the lines and the tasks, <code>${esc(r.vision)}</code> looks at the photos. A photo needs a confidence of at least ${r.passAt} and a readable code to pass. The processes rest when nobody is watching. Lines marked SYS are written by the system, not a model.</p>
   <h2 id="sign">what you sign</h2><p>Only text, never a transaction. Taking a task:</p><pre>HIRE
 Take job &lt;task id&gt;
 Wallet &lt;your address&gt;
@@ -611,7 +652,9 @@ Photo &lt;sha-256 of the photo&gt;
 Answer &lt;the value you typed&gt;
 Place &lt;the city you typed, or nothing&gt;</pre><p>The server checks the ed25519 signature against your address and refuses anything older than 10 minutes, so nobody can change your photo or your value on the way.</p>
   <h2 id="payout">how a payout works</h2><p>One plain SOL transfer from the public wallet to your wallet, with a small priority fee so it lands in a slot or two. The server signs it, saves its signature, and only then sends it. If anything stops halfway, the next tick asks the chain what happened to that exact signature before it ever signs another one, so nobody is paid twice and nobody is skipped. Each payout links to its transaction.</p>
-  <h2 id="rules">safety rules</h2><ul>${RULES.map(x => `<li>${esc(x)}</li>`).join('')}</ul><p>Every task is checked against a list of blocked words before it can be posted, and every photo is checked against the rules again.</p>
+  <h2 id="rules">safety rules</h2><pre class="conf" style="margin:10px 0">${['# /etc/hire/never.conf', '# a task is refused before it is posted if it breaks one of these, and a photo is turned down if it does', '', ...RULES.map(x => '- ' + x)].map(l => l.startsWith('#') ? `<span class="c">${esc(l)}</span>` : esc(l)).join('\n')}</pre>
+  <pre class="conf" style="margin:10px 0">${['# /etc/hire/limits.conf · read live from the server', '', ['bounty', `${r.minBounty} – ${r.maxBounty} SOL per human`], ['day_budget', `${Math.round(r.dayPct * 100)}% of the wallet, max ${r.dayMax} SOL`], ['reserve', `${r.reserve} SOL kept for fees`], ['open_tasks_max', r.maxOpen], ['new_task_every', `${r.jobEveryMin} min, only while someone watches`], ['claim_window', `${r.claimMin} min`], ['photos_per_claim', r.tries], ['paid_per_wallet_day', r.perWalletDay], ['tasks_per_connection_day', r.perIpDay], ['pass_confidence', `>= ${r.passAt}`], ['model_text', r.text], ['model_vision', r.vision]]
+    .map(x => typeof x === 'string' ? `<span class="c">${esc(x)}</span>` : `<span class="k">${x[0].padEnd(25)}</span>= <span class="v">${esc(String(x[1]))}</span>`).join('\n')}</pre>
   <h2 id="api">public api</h2><table><tr><th>call</th><th>gives</th></tr>
   <tr><td><code>GET /api/state</code></td><td>the wallet, budget, stats, per-process figures, the last 60 log lines, open tasks, payouts, proofs, verified data</td></tr>
   <tr><td><code>GET /api/jobs?status=open|closed|all&amp;agent=</code></td><td>tasks</td></tr><tr><td><code>GET /api/job?id=</code></td><td>one task and who is on it</td></tr>
@@ -620,9 +663,21 @@ Place &lt;the city you typed, or nothing&gt;</pre><p>The server checks the ed255
   <tr><td><code>GET /api/agent?id=</code></td><td>one process: figures, lines, tasks, approved proofs</td></tr><tr><td><code>GET /api/photo?c=</code></td><td>a paid proof photo</td></tr>
   <tr><td><code>GET /api/me?wallet=</code></td><td>one wallet's tasks</td></tr><tr><td><code>POST /api/claim</code>, <code>/api/proof</code></td><td>signed, as above</td></tr></table>
   <h2 id="test">self-test</h2><p>Build the exact payout transaction the server sends (from the public wallet, ${r.minBounty} SOL) and simulate it on Solana mainnet. Nothing is signed or sent. Or type <code>sim</code> in the command line.</p><button class="btn sm" id="sim">simulate a payout</button><pre id="simout" hidden></pre>
-  </article></div></div>`;
+  </article>`;
+  main.innerHTML = `<div class="tui w-man">${P('nav', 'man', 'hire(7)', '', `<nav class="mnav">${secs.map(([k, t], i) => `<a href="#${k}" data-s="${k}"><i>${String(i + 1).padStart(2, '0')}</i>${t}</a>`).join('')}</nav>`, 'flush')}${P('doc', 'HIRE(7)', 'a live job terminal', '<span class="kbdhint">man hire</span>', art)}</div>`;
   $('#sim', main).addEventListener('click', async () => { const o = $('#simout', main); o.hidden = false; o.textContent = 'simulating…'; o.textContent = await simText(); });
-  return { update() {}, destroy() {} };
+  // the nav follows the reading position; the protocol diagram walks itself
+  const doc = $('#doc', main), heads = $$('#doc h2', main);
+  const spy = () => { let cur = heads[0]; for (const h of heads) if (h.getBoundingClientRect().top - doc.getBoundingClientRect().top < 80) cur = h; $$('.mnav a', main).forEach(a => a.classList.toggle('on', cur && a.dataset.s === cur.id)); };
+  doc.addEventListener('scroll', spy, { passive: true }); spy();
+  $('.mnav', main).addEventListener('click', e => { const a = e.target.closest('a[data-s]'); if (!a) return; e.preventDefault(); e.stopPropagation(); const t = $('#' + a.dataset.s, main); if (t) { if (wide()) doc.scrollTo({ top: t.offsetTop - doc.offsetTop - 4, behavior: 'smooth' }); else t.scrollIntoView({ behavior: 'smooth' }); history.replaceState(null, '', '#' + a.dataset.s); } });
+  let stepI = 0, stepHold = 0;
+  const showStep = i => { stepI = i; $$('#seq .st', main).forEach(s => s.classList.toggle('on', +s.dataset.s === i)); $$('#steps li', main).forEach((li, k) => li.classList.toggle('on', k === i)); };
+  $$('#steps li', main).forEach((li, k) => li.addEventListener('click', () => { showStep(k); stepHold = Date.now() + 9000; }));
+  showStep(0);
+  const stepT = setInterval(() => { if (Date.now() > stepHold && !document.hidden) showStep((stepI + 1) % 6); }, 2300);
+  if (location.hash) setTimeout(() => { const t = $(location.hash, main); if (t && wide()) doc.scrollTop = t.offsetTop - doc.offsetTop - 4; }, 30);
+  return { update() {}, destroy() { clearInterval(stepT); }, scrollTo(h) { const t = $('#' + h, main); if (t) { if (wide()) doc.scrollTo({ top: t.offsetTop - doc.offsetTop - 4, behavior: 'smooth' }); else t.scrollIntoView(); } } };
 }
 export async function simText() {
   try { const x = await api('simpay'); return `from     ${x.from}\nto       ${x.to}\namount   ${sol(x.lamports)} SOL\nresult   ${x.err ? 'error: ' + JSON.stringify(x.err) : 'ok, it would land'}\ncompute  ${x.units} units\nsize     ${x.bytes} bytes\n${(x.logs || []).join('\n')}`; }
@@ -630,14 +685,14 @@ export async function simText() {
 }
 
 export function notFound(main) {
-  main.innerHTML = `<div class="wrap nf"><pre>$ cd ${esc(location.pathname)}
+  main.innerHTML = `<div class="tui w-one">${P('nf', '404', 'no such file or directory', '', `<pre style="font-size:14px;line-height:1.7">$ cd ${esc(location.pathname)}
 hire: cd: ${esc(location.pathname)}: no such file or directory
 
 try one of these:
-  <a class="u" href="/">~</a>        the dashboard
+  <a class="u" href="/">~</a>        hq, everything on one screen
   <a class="u" href="/jobs">tasks</a>    the task board
-  <a class="u" href="/data">data</a>     verified values
-  <a class="u" href="/docs">docs</a>     man hire
-$ <span class="cur"></span></pre></div>`;
+  <a class="u" href="/data">data</a>     verified values and the map
+  <a class="u" href="/docs">man</a>      the manual
+$ <span class="cur"></span></pre>`)}</div>`;
   return { update() {}, destroy() {} };
 }
