@@ -14,15 +14,19 @@
   ],
   "rewrites": [
     {
-      "source": "/api/:op(state|since|jobs|job|me|payouts|humans|agent|photo|tick|simpay|here|claim|proof|sweep|hide)",
+      "source": "/api/:op(state|since|data|jobs|job|me|payouts|humans|agent|photo|tick|simpay|here|claim|proof|sweep|hide)",
       "destination": "/api/hire?op=:op"
     },
     {
-      "source": "/:page(jobs|agents|payouts|humans|proofs|docs|me|wallet|rules)",
+      "source": "/:page(jobs|tasks|data|agents|payouts|humans|proofs|docs|me|wallet|rules)",
       "destination": "/index.html"
     },
     {
       "source": "/job/:id",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/task/:id",
       "destination": "/index.html"
     },
     {
