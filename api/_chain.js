@@ -119,4 +119,21 @@ async function solUsd() {
   px.t = Date.now() - 90000; return px.v;
 }
 
-module.exports = { MOCK, solUsd, LAMPORTS, FEE, treasury, address, balance, prepare, land, settle, look, pay, simulatePay, status, isAddr, rpc };
+// what a transaction did: who signed, when, and how every balance moved (for jobs whose answer is a signature)
+async function txFacts(sig) {
+  const t = await rpc(c => c.getTransaction(sig, { maxSupportedTransactionVersion: 0, commitment: 'confirmed' }));
+  if (!t || !t.meta) return null;
+  const msg = t.transaction.message, b58 = k => typeof k === 'string' ? k : k.toBase58();
+  const keys = (msg.staticAccountKeys || msg.accountKeys).map(b58), la = t.meta.loadedAddresses || { writable: [], readonly: [] };
+  return { ok: !t.meta.err, at: (t.blockTime || 0) * 1000, signers: keys.slice(0, msg.header.numRequiredSignatures), keys: keys.concat(la.writable.map(b58), la.readonly.map(b58)),
+    pre: t.meta.preBalances, post: t.meta.postBalances, fee: t.meta.fee || 0, tokPre: t.meta.preTokenBalances || [], tokPost: t.meta.postTokenBalances || [] };
+}
+// a wallet's history, oldest first: how many transactions (up to 1000) and the very first one
+async function firstTx(addr) {
+  const sigs = await rpc(c => c.getSignaturesForAddress(new (w3().PublicKey)(addr), { limit: 1000 }, 'confirmed'));
+  if (!sigs.length) return { count: 0 };
+  const o = sigs[sigs.length - 1];
+  return { count: sigs.length, full: sigs.length >= 1000, oldest: o.signature, at: (o.blockTime || 0) * 1000 };
+}
+
+module.exports = { MOCK, txFacts, firstTx, solUsd, LAMPORTS, FEE, treasury, address, balance, prepare, land, settle, look, pay, simulatePay, status, isAddr, rpc };

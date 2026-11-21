@@ -77,6 +77,8 @@ function schema() {
     await q(`CREATE TABLE IF NOT EXISTS hire_here (id text PRIMARY KEY, at timestamptz NOT NULL DEFAULT now())`);
     // v3: every task asks for one value; the human reports it (and, if they like, where), the reviewer reads it off the photo
     await q(`ALTER TABLE hire_jobs ADD COLUMN IF NOT EXISTS ask text`);
+    await q(`ALTER TABLE hire_jobs ADD COLUMN IF NOT EXISTS type text`);
+    await q(`ALTER TABLE hire_claims ADD COLUMN IF NOT EXISTS norm text`);
     await q(`ALTER TABLE hire_claims ADD COLUMN IF NOT EXISTS answer text`);
     await q(`ALTER TABLE hire_claims ADD COLUMN IF NOT EXISTS place text`);
     await q(`ALTER TABLE hire_claims ADD COLUMN IF NOT EXISTS seen text`);

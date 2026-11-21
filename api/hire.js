@@ -4,6 +4,8 @@ const L = require('./_lib');
 const W = require('./_world');
 const C = require('./_chain');
 const AI = require('./_ai');
+const CAT = require('./_catalog');
+const { RULES } = require('./_agents');
 
 const ok = (res, obj, cache) => L.send(res, 200, obj, cache);
 const reqOk = s => typeof s === 'string' && s.length > 0 && s.length < 200;
@@ -13,6 +15,7 @@ module.exports = async (req, res) => {
   const op = String(qy.op || '').toLowerCase().replace(/[^a-z]/g, '');
   AI.setToken(req.headers['x-vercel-oidc-token']);
   try {
+    if (op === 'catalog' && (req.method === 'GET' || req.method === 'HEAD')) return ok(res, { jobs: CAT.pub(), coin: CAT.COIN, pitch: CAT.PITCH, rules: RULES }, L.CACHE(300, 3600));
     if (!L.dbReady()) return L.send(res, 503, { error: 'The database is not connected yet.' });
     await L.schema();
     const ip = L.ip(req);
