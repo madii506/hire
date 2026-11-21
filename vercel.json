@@ -14,7 +14,7 @@
   ],
   "rewrites": [
     {
-      "source": "/api/:op(state|since|data|jobs|job|me|payouts|humans|agent|photo|tick|simpay|here|claim|proof|sweep|hide)",
+      "source": "/api/:op(state|since|data|catalog|jobs|job|me|payouts|humans|agent|photo|tick|simpay|here|claim|proof|sweep|hide)",
       "destination": "/api/hire?op=:op"
     },
     {
