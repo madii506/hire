@@ -19,19 +19,19 @@
     },
     {
       "source": "/:page(jobs|tasks|data|agents|payouts|humans|proofs|docs|me|wallet|rules)",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/job/:id",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/task/:id",
-      "destination": "/index.html"
+      "destination": "/"
     },
     {
       "source": "/agent/:id",
-      "destination": "/index.html"
+      "destination": "/"
     }
   ],
   "headers": [
