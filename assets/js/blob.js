@@ -57,7 +57,7 @@ export function blob(a, { shadow = true } = {}) {
     + `<g class="bod">${arm(-1)}${arm(1)}`
     + `<path d="${egg(bw, bh, cy)}" fill="${a.c}" stroke="${L}" stroke-width="${lw}"/>`
     + `<ellipse cx="0" cy="${f(cy + bh * .42)}" rx="${f(bw * .58)}" ry="${f(bh * .42)}" fill="${a.b}" opacity=".85"/>`
-    + `<g class="eyes"><ellipse cx="-9" cy="${fy}" rx="3.6" ry="4.6" fill="#141414"/><ellipse cx="9" cy="${fy}" rx="3.6" ry="4.6" fill="#141414"/><circle cx="-7.8" cy="${f(fy - 1.6)}" r="1.3" fill="#fff"/><circle cx="10.2" cy="${f(fy - 1.6)}" r="1.3" fill="#fff"/></g>`
+    + `<g class="look"><g class="eyes"><ellipse cx="-9" cy="${fy}" rx="3.6" ry="4.6" fill="#141414"/><ellipse cx="9" cy="${fy}" rx="3.6" ry="4.6" fill="#141414"/><circle class="hl" cx="-7.8" cy="${f(fy - 1.6)}" r="1.3" fill="#fff"/><circle class="hl" cx="10.2" cy="${f(fy - 1.6)}" r="1.3" fill="#fff"/></g></g>`
     + `<path class="mouth" d="M-5,${fy + 7}Q0,${fy + 12} 5,${fy + 7}" stroke="#141414" stroke-width="2.2" fill="none" stroke-linecap="round"/>`
     + `<ellipse cx="-18" cy="${fy + 6}" rx="5" ry="3" fill="#ff7fa3" opacity=".6"/><ellipse cx="18" cy="${fy + 6}" rx="5" ry="3" fill="#ff7fa3" opacity=".6"/>`
     + acc(a, cy, bh, fy) + `</g>`;

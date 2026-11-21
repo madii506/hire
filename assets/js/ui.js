@@ -1,6 +1,6 @@
 // HIRE · shared pieces: the API, formatting, the wallet picker, toasts, and the cards every page uses.
-import { AG, BY, avatar, face } from './blob.js?v=1';
-import * as W from './wallet.js?v=1';
+import { AG, BY, avatar, face } from './blob.js?v=2';
+import * as W from './wallet.js?v=2';
 
 // set these once the coin is live (left empty, nothing about a token is shown anywhere)
 export const CONFIG = { ca: '', x: '' };

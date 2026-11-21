@@ -2,7 +2,8 @@
 // is played here: the speaker takes the stairs to whoever they are talking to, a bubble opens, a job card goes up on
 // the board in the lobby, the Accountant walks down to the vault and the coins leave the building. Nothing here is
 // invented: the bubbles are the log, the cards are the open jobs, the number on the vault is the wallet's balance.
-import { AG, BY, blob, L, star, mark } from './blob.js?v=1';
+import { AG, BY, blob, L, star, mark } from './blob.js?v=2';
+import { pointer } from './eyes.js?v=2';
 const LINE = L;
 const markMini = () => mark(0, 0, 1, '#fff', '#f6d58a');
 
@@ -179,6 +180,16 @@ function building(P) {
     if (x > bx0 - 6 && x < bx1 + 6 && y > roofY - 110) continue;
     o.push(R() < .22 ? `<g class="tw" style="--d:${(R() * 4).toFixed(2)}s">${star(x, y, 2 + R() * 3.2, R() < .5 ? '#f6d58a' : '#ffffff')}</g>` : `<circle class="tw" style="--d:${(R() * 4).toFixed(2)}s" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(.6 + R() * 1.1).toFixed(2)}" fill="#fff" opacity="${(.25 + R() * .5).toFixed(2)}"/>`);
   }
+  // the seer: an eye in the sky that watches the building, and you
+  { const wide = P.mode === 'wide', cx = wide ? 1092 : 566, cy = wide ? 112 : 96, r = wide ? 46 : 32;
+    let veins = ''; seed = 3;
+    for (let i = 0; i < 9; i++) { const a = (i / 9) * 6.28 + R() * .5, x0 = Math.cos(a) * r, y0 = Math.sin(a) * r * .8, x1 = x0 * .55 + (R() - .5) * 8, y1 = y0 * .55 + (R() - .5) * 6; veins += `M${x0.toFixed(1)},${y0.toFixed(1)}Q${((x0 + x1) / 2 + (R() - .5) * 8).toFixed(1)},${((y0 + y1) / 2).toFixed(1)} ${x1.toFixed(1)},${y1.toFixed(1)}`; }
+    o.push(`<g class="seer" transform="translate(${cx},${cy})" data-r="${r}"><ellipse class="sglow" rx="${r * 2.6}" ry="${r * 1.6}" fill="url(#seerGlow)"/>`
+      + `<clipPath id="seerClip"><path class="slid" d="M${-r * 1.3},0Q0,0 ${r * 1.3},0Q0,0 ${-r * 1.3},0Z"/></clipPath>`
+      + `<g clip-path="url(#seerClip)"><ellipse rx="${r * 1.3}" ry="${r}" fill="url(#seerBall)"/><path d="${veins}" stroke="#c2272d" stroke-width="1.1" fill="none" opacity=".55"/>`
+      + `<g class="siris"><circle r="${r * .5}" fill="url(#seerIris)"/><circle r="${r * .5}" fill="none" stroke="#ff3b3b" stroke-width="2"/><circle class="spupil" r="${r * .2}" fill="#000"/><circle cx="${-r * .16}" cy="${-r * .18}" r="${r * .08}" fill="#fff" opacity=".85"/></g></g>`
+      + `<path class="sline" d="M${-r * 1.3},0Q0,0 ${r * 1.3},0" fill="none" stroke="${L}" stroke-width="2.4" stroke-linecap="round"/>`
+      + `<text class="whisper" x="0" y="${r * 1.9}" text-anchor="middle">we see you.</text></g>`); }
   // earth below the horizon, and the horizon itself
   o.push(rect(0, G, W, H - G, 'url(#earth)'));
   o.push(rect(0, G - 26, W, 26, 'url(#glowUp)') + rect(0, G, W, 18, 'url(#glowDn)'));
@@ -231,16 +242,21 @@ const DEFS = `<defs>
   <linearGradient id="glowUp" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#f2b84b" stop-opacity=".28"/><stop offset="1" stop-color="#f2b84b" stop-opacity="0"/></linearGradient>
   <linearGradient id="glowDn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f2b84b" stop-opacity=".22"/><stop offset="1" stop-color="#f2b84b" stop-opacity="0"/></linearGradient>
   <linearGradient id="cone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd77a" stop-opacity=".22"/><stop offset="1" stop-color="#ffd77a" stop-opacity="0"/></linearGradient>
+  <radialGradient id="seerGlow"><stop offset="0" stop-color="#ff2a2a" stop-opacity=".34"/><stop offset=".45" stop-color="#a1121a" stop-opacity=".14"/><stop offset="1" stop-color="#a1121a" stop-opacity="0"/></radialGradient>
+  <radialGradient id="seerBall" cx=".45" cy=".4"><stop offset="0" stop-color="#fbf6ea"/><stop offset=".7" stop-color="#e6dcc6"/><stop offset="1" stop-color="#a8957a"/></radialGradient>
+  <radialGradient id="seerIris"><stop offset="0" stop-color="#14040a"/><stop offset=".55" stop-color="#7a0f1a"/><stop offset=".85" stop-color="#3a070d"/><stop offset="1" stop-color="#1a0306"/></radialGradient>
   <linearGradient id="hz" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#f2b84b" stop-opacity="0"/><stop offset=".15" stop-color="#f2b84b"/><stop offset=".85" stop-color="#f2b84b"/><stop offset="1" stop-color="#f2b84b" stop-opacity="0"/></linearGradient>
 </defs>`;
 
 // ---------------------------------------------------------------- the live part
 export function mountHQ(host, { onAgent } = {}) {
   host.classList.add('hq');
-  host.innerHTML = `<svg class="hqsvg" role="img" aria-label="HIRE HQ: ten AI agents at work, live"></svg><div class="bubs" aria-live="polite"></div><div class="hqtag" hidden></div>`;
-  const svg = host.querySelector('svg'), bubs = host.querySelector('.bubs'), tag = host.querySelector('.hqtag');
+  host.innerHTML = `<svg class="hqsvg" role="img" aria-label="HIRE HQ: ten AI agents at work, live"></svg><div class="bubs" aria-live="polite"></div><div class="hqtag" hidden></div><div class="reticle" hidden><i></i></div><div class="hqred"></div>`;
+  const svg = host.querySelector('svg'), bubs = host.querySelector('.bubs'), tag = host.querySelector('.hqtag'), ret = host.querySelector('.reticle');
   let P = null, A = {}, where = {}, cards = [], queue = [], lastPlay = 0, stateRef = null, raf = 0, visible = true, coins = [], H = [];
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const seer = { o: 0, tgt: 1, blinkAt: 0, ix: 0, iy: 0, pupil: 1, look: null, gold: 0 };
+  let noticeUntil = 0, nextNotice = performance.now() + 22000 + Math.random() * 14000, nextFlick = performance.now() + 3000;
 
   function build() {
     const mode = host.clientWidth < 720 ? 'narrow' : 'wide';
@@ -338,7 +354,10 @@ export function mountHQ(host, { onAgent } = {}) {
     b.className = 'bub k-' + kind; b.dataset.a = o.id;
     const to = line.target && BY[line.target] ? ` <i>→ ${esc(BY[line.target].name)}</i>` : '';
     const lab = { posts: 'posted a job', hires: 'hired a human', reviews: 'checked a photo', pays: 'paid a human', thinks: 'thinking' }[kind];
-    b.innerHTML = `<div class="bh"><b style="color:${o.a.c}">${esc(o.a.name)}</b>${to}${lab ? ` <em>${lab}</em>` : ''}</div><div class="bt">${esc(line.text)}</div>`;
+    b.innerHTML = `<div class="bh"><b style="color:${o.a.c}">${esc(o.a.name)}</b>${to}${lab ? ` <em>${lab}</em>` : ''}</div><div class="bt"><span class="ty"></span><span class="ghost">${esc(line.text)}</span></div>`;
+    { const ty = b.querySelector('.ty'), gh = b.querySelector('.ghost'), full = String(line.text), step2 = Math.max(1, Math.round(full.length / 45)); let n = 0;
+      const tick = () => { n = Math.min(full.length, n + step2); ty.textContent = full.slice(0, n); gh.textContent = full.slice(n); if (n < full.length && b.isConnected) setTimeout(tick, 26); };
+      if (reduced) { ty.textContent = full; gh.textContent = ''; } else setTimeout(tick, 120); }
     while (bubs.children.length >= 2) bubs.firstChild.remove();
     bubs.appendChild(b);
     const ms = clamp(2600 + line.text.length * 55, 4200, 9000);
@@ -361,8 +380,8 @@ export function mountHQ(host, { onAgent } = {}) {
     if (fast && o.path.length) { const last = o.path[o.path.length - 1]; o.x = last.x; o.y = last.y; o.lv = last.lv != null ? last.lv : o.lv; o.path = []; t = 0; }
     setTimeout(() => {
       if (near && A[near]) { A[near].face = A[near].x < o.x ? 1 : -1; o.face = A[near].x < o.x ? -1 : 1; A[near].idle = 6; }
-      bubble(o, line);
-      if (line.kind === 'pays') payCoins(hu);
+      bubble(o, line); seer.look = o.id;
+      if (line.kind === 'pays') { payCoins(hu); seer.gold = performance.now() + 2600; }
       if (line.kind === 'posts') { const c = svg.querySelector('.cards'); if (c) { c.classList.remove('pop'); void c.getBoundingClientRect(); c.classList.add('pop'); } }
     }, Math.min(t, 7) * 1000 + 120);
     return Math.min(t, 7) + clamp(2.4 + line.text.length * .035, 3.4, 7);
@@ -443,13 +462,70 @@ export function mountHQ(host, { onAgent } = {}) {
     st.innerHTML = o;
   }
   function clock() { const c = svg.querySelector('.clk'); if (c) { const d = new Date(); c.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); } }
+  // ---- the watching: where the cursor is in the building, the seer, the agents' eyes, and the moments they notice you
+  function cursorSvg() {
+    if (performance.now() - pointer.at > 4000) return null;
+    const r = svg.getBoundingClientRect(); if (!r.width || pointer.x < r.left - 80 || pointer.x > r.right + 80 || pointer.y < r.top - 200 || pointer.y > r.bottom + 200) return null;
+    return { x: (pointer.x - r.left) / r.width * P.W, y: (pointer.y - r.top) / r.height * P.H };
+  }
+  function watch(now) {
+    const g = svg.querySelector('.seer'); if (!g) return;
+    const r = +g.dataset.r, cur = cursorSvg(), noticing = now < noticeUntil;
+    // blink every few seconds; open wider while it notices you
+    if (!seer.blinkAt) seer.blinkAt = now + 4000 + Math.random() * 5000;
+    let o = noticing ? 1.18 : 1;
+    if (now > seer.blinkAt) { const b = (now - seer.blinkAt) / 240; if (b >= 1) seer.blinkAt = now + 5000 + Math.random() * 7000; else o *= Math.abs(1 - b * 2); }
+    seer.o += (o - seer.o) * .25;
+    const h = r * .78 * Math.max(0, seer.o), w = r * 1.3;
+    g.querySelector('.slid').setAttribute('d', `M${-w},0Q0,${-h * 2} ${w},0Q0,${h * 2} ${-w},0Z`);
+    g.querySelector('.sline').setAttribute('d', `M${-w},0Q0,${-h * 2} ${w},0`);
+    // what it looks at: you, else whoever is talking, else the board
+    const tr = g.transform.baseVal.consolidate().matrix, cx = tr.e, cy = tr.f;
+    let tx = cx, ty = cy + 100;
+    if (cur) { tx = cur.x; ty = cur.y; }
+    else if (seer.look && A[seer.look]) { tx = A[seer.look].x; ty = A[seer.look].y - 50; }
+    const dx = tx - cx, dy = ty - cy, d = Math.hypot(dx, dy) || 1, k = Math.min(1, d / 260);
+    seer.ix += (dx / d * k * r * .62 - seer.ix) * .18; seer.iy += (dy / d * k * r * .42 - seer.iy) * .18;
+    seer.pupil += ((noticing ? 1.75 : cur ? 1.15 : 1) - seer.pupil) * .12;
+    const iris = g.querySelector('.siris'); iris.setAttribute('transform', `translate(${seer.ix.toFixed(1)},${seer.iy.toFixed(1)})`);
+    iris.querySelector('.spupil').setAttribute('r', (r * .2 * seer.pupil).toFixed(1));
+    // the agents' eyes: at you when you are near the building, at the one talking, or straight ahead
+    const talker = Object.values(A).find(x => x.talkUntil > now);
+    for (const a of Object.values(A)) {
+      const look = a.g.querySelector('.look'); if (!look) continue;
+      let lx = 0, ly = 0, t = null;
+      if (cur) t = cur; else if (talker && talker !== a) t = { x: talker.x, y: talker.y - 60 * P.s };
+      if (t) { const vx = t.x - a.x, vy = t.y - (a.y - 62 * P.s), vd = Math.hypot(vx, vy) || 1, kk = Math.min(1, vd / 160); lx = vx / vd * kk * 3.2 * (a.face < 0 ? -1 : 1); ly = vy / vd * kk * 2.6; }
+      if (noticing) { lx = cur ? lx : 0; ly = cur ? ly : 1.5; }
+      a.lx = (a.lx || 0) + (lx - (a.lx || 0)) * .25; a.ly = (a.ly || 0) + (ly - (a.ly || 0)) * .25;
+      look.setAttribute('transform', `translate(${a.lx.toFixed(2)},${a.ly.toFixed(2)})`);
+    }
+    // now and then, they all stop and stare at you
+    if (!reduced && now > nextNotice && visible && !document.hidden && !queue.length) {
+      noticeUntil = now + 2900; nextNotice = now + 30000 + Math.random() * 25000;
+      host.classList.add('notice'); setTimeout(() => host.classList.remove('notice'), 2900);
+      for (const a of Object.values(A)) a.face = cur ? (cur.x < a.x ? -1 : 1) : a.face;
+    }
+    // a light that flickers somewhere
+    if (!reduced && now > nextFlick) {
+      nextFlick = now + 2500 + Math.random() * 5000;
+      const lit = [...svg.querySelectorAll('.room.lit')]; const pick = lit[(Math.random() * lit.length) | 0];
+      if (pick) { pick.classList.add('flick'); setTimeout(() => pick.classList.remove('flick'), 900); }
+    }
+    g.classList.toggle('gold', now < seer.gold);
+    // a reticle where you point: the building sees your cursor too
+    const hr = host.getBoundingClientRect(), inside = !pointer.touch && now - pointer.at < 3000 && pointer.x > hr.left && pointer.x < hr.right && pointer.y > hr.top && pointer.y < hr.bottom;
+    ret.hidden = !inside;
+    if (inside) { ret.style.left = (pointer.x - hr.left) + 'px'; ret.style.top = (pointer.y - hr.top) + 'px'; }
+  }
   // ---- the loop
   let last = performance.now();
   function frame(now) {
     raf = 0;
     if (!P) return;
+    if (document.body.classList.contains('intro-on')) { raf = requestAnimationFrame(frame); last = now; return; }   // the intro has the GPU
     const dt = Math.min(.05, (now - last) / 1000); last = now;
-    pump(now); step(dt, now); stepHumans(dt, now); place(); drawCoins(now);
+    pump(now); if (now > noticeUntil) step(dt, now); stepHumans(dt, now); place(); drawCoins(now); watch(now);
     if (visible && !document.hidden) raf = requestAnimationFrame(frame);
   }
   const wake = () => { if (!raf && visible && !document.hidden) { last = performance.now(); raf = requestAnimationFrame(frame); } };

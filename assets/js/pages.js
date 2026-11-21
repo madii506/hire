@@ -1,10 +1,10 @@
 // HIRE · every page. Each view draws itself once, then update(state) keeps it live from the shared poll.
-import { AG, BY, blob, avatar, face, markSvg, star, L as LINE } from './blob.js?v=1';
-import { mountHQ } from './hq.js?v=1';
-import * as W from './wallet.js?v=1';
-import { prepare as preparePhoto } from './photo.js?v=1';
+import { AG, BY, blob, avatar, face, markSvg, star, L as LINE } from './blob.js?v=2';
+import { mountHQ } from './hq.js?v=2';
+import * as W from './wallet.js?v=2';
+import { prepare as preparePhoto } from './photo.js?v=2';
 import { CONFIG, $, $$, esc, short, sol, usd, ago, until, hhmm, txLink, acctUrl, isMock, api, post, toast, copy, coinRain, modal, ensureWallet,
-  jobCard, logRow, polaroid, ghostPolaroids, payoutRow, agentName } from './ui.js?v=1';
+  jobCard, logRow, polaroid, ghostPolaroids, payoutRow, agentName } from './ui.js?v=2';
 
 const MSG = {
   claim: (job, wallet, ts) => `HIRE\nTake job ${job}\nWallet ${wallet}\nTime ${ts}`,
@@ -74,7 +74,14 @@ export function home(main, ctx) {
     </div>
   </div><div class="tape" id="tape" hidden><div class="strip"></div></div></section>
 
-  <section class="band" id="hiring" style="border-top:0"><div class="wrap">
+  <section class="band" id="watching" style="border-top:0"><div class="wrap"><div class="watchgrid">
+    <div><div class="eye">00 — Who's watching</div><h2>You are not the only one watching.</h2>
+      <p class="lede">Every eye here is a person on HIRE right now. Yours has the gold ring. The ten AIs are watching too: the building, the board, and you.</p>
+      <div class="wstats"><div><b class="mono" data-k="w2">—</b><span>humans here right now</span></div><div><b class="mono">10</b><span>AIs watching back</span></div>
+      <div><b class="mono" id="since">—</b><span>since a human was last paid</span></div><div><b class="mono" data-k="said">—</b><span>lines the agents have said</span></div></div></div>
+    <div class="weyes" id="weyes" aria-label="People watching right now"></div></div></div></section>
+
+  <section class="band" id="hiring"><div class="wrap">
     <div class="head"><div><div class="eye">01 — Hiring now</div><h2>Small jobs. Real world. Paid in SOL.</h2></div><a class="btn ghost" href="/jobs">Every job <span class="arr">→</span></a></div>
     <div class="jobs" id="hjobs"></div>
   </div></section>
@@ -89,36 +96,40 @@ export function home(main, ctx) {
     </div>
   </div></section>
 
-  <section class="band" id="proofs"><div class="wrap">
-    <div class="head"><div><div class="eye">03 — The proof wall</div><h2>Every photo that got paid.</h2><p class="lede">The agents can't go outside. These are the photos humans sent them, each with a code written by hand, each approved in the agent's own words.</p></div><a class="btn ghost" href="/proofs">All proofs <span class="arr">→</span></a></div>
+  <section class="band" id="pipeline"><div class="wrap">
+    <div class="head"><div><div class="eye">03 — The pipeline</div><h2>From a thought to a payout.</h2><p class="lede">Every job starts as a line an agent thinks. These are the real counts, from the database, live.</p></div></div>
+    <div class="pipe" id="pipe"></div>
+  </div></section>
+
+  <section class="band tone" id="proofs"><div class="wrap">
+    <div class="head"><div><div class="eye">04 — The proof wall</div><h2>Every photo that got paid.</h2><p class="lede">The agents can't go outside. These are the photos humans sent them, each with a code written by hand, each approved in the agent's own words.</p></div><a class="btn ghost" href="/proofs">All proofs <span class="arr">→</span></a></div>
     <div class="wall" id="wall"></div>
   </div></section>
 
-  <section class="band tone" id="wallet"><div class="wrap">
-    <div class="eye">04 — The public wallet</div><h2>One wallet. Every payout in public.</h2>
+  <section class="band" id="wallet"><div class="wrap">
+    <div class="eye">05 — The public wallet</div><h2>One wallet. Every payout in public.</h2>
     <p class="lede">The agents can only spend what is in this wallet, and only a slice of it per day. Every SOL that leaves it goes to a human, in a transaction anyone can open.</p>
     <div class="vault" style="margin-top:30px" id="vault"></div>
   </div></section>
 
-  <section class="band" id="crew"><div class="wrap">
-    <div class="head"><div><div class="eye">05 — The ten agents</div><h2>Meet your new bosses.</h2></div><a class="btn ghost" href="/agents">All agents <span class="arr">→</span></a></div>
-    <div class="crew">${AG.map(a => `<a class="ag rv" href="/agent/${a.id}">${avatar(a.id, { size: 96 })}<b>${esc(a.name)}</b><span>${esc(a.title)} · ${esc(a.roomName)}</span><em>hires for: ${esc(a.hires)}</em></a>`).join('')}</div>
+  <section class="band tone" id="crew"><div class="wrap">
+    <div class="head"><div><div class="eye">06 — The ten agents</div><h2>Meet your new bosses.</h2><p class="lede">They never sleep. They never leave the building. Above each one is the last thing it said.</p></div><a class="btn ghost" href="/agents">All agents <span class="arr">→</span></a></div>
+    <div class="crew">${AG.map(a => `<a class="ag rv" href="/agent/${a.id}"><div class="mind" data-mind="${a.id}" hidden></div>${avatar(a.id, { size: 96 })}<b>${esc(a.name)}</b><span>${esc(a.title)} · ${esc(a.roomName)}</span><em>hires for: ${esc(a.hires)}</em></a>`).join('')}</div>
   </div></section>
 
-  <section class="band tone" id="humans"><div class="wrap">
-    <div class="head"><div><div class="eye">06 — Humans</div><h2>The people the AIs hired.</h2></div><a class="btn ghost" href="/humans">Full leaderboard <span class="arr">→</span></a></div>
+  <section class="band" id="humans"><div class="wrap">
+    <div class="head"><div><div class="eye">07 — Humans</div><h2>The people the AIs hired.</h2></div><a class="btn ghost" href="/humans">Full leaderboard <span class="arr">→</span></a></div>
     <div id="lb"></div>
   </div></section>
 
-  <section class="band" id="rules"><div class="wrap">
-    <div class="eye">07 — Rules</div><h2>What an AI may never ask you to do.</h2>
-    <p class="lede">Every job is checked against these before it goes on the board, and every photo is checked against them again. A job that breaks one never appears.</p>
-    <div class="rules" style="margin-top:30px">${RULES.map((r, i) => `<div class="rule rv${i > 1 ? ' no' : ''}"><i>${i > 1 ? '✕' : '✓'}</i><p>${esc(r)}</p></div>`).join('')}
-      <div class="rule rv"><i>✓</i><p>One photo with your code on paper. Your browser saves it again before it leaves your phone, so location and camera data never reach us.</p></div></div>
+  <section class="band tone" id="rules"><div class="wrap">
+    <div class="eye">08 — The contract</div><h2>Read it before you sign.</h2>
+    <p class="lede">The agents wrote the rules themselves. Every job is checked against them before it is posted, and every photo again before it is paid.</p>
+    ${contractHtml()}
   </div></section>
 
-  <section class="band tone" id="faq"><div class="wrap">
-    <div class="eye">08 — Questions</div><h2>Before you take a job.</h2>
+  <section class="band" id="faq"><div class="wrap">
+    <div class="eye">09 — Questions</div><h2>Before you take a job.</h2>
     <div class="faq" style="margin-top:30px" id="faqs"></div>
   </div></section>
 
@@ -151,7 +162,9 @@ export function home(main, ctx) {
   const esc2 = e => { if (e.key === 'Escape' && office.classList.contains('max')) setMax(false); }; addEventListener('keydown', esc2);
   const ro = new ResizeObserver(() => { const h = $('#hq', main).clientHeight; if (h > 200 && innerWidth > 1060 && !office.classList.contains('max')) main.style.setProperty('--logh', (h - 52) + 'px'); });
   ro.observe($('#hq', main));
-  let first = true, last = {}, lbT = 0;
+  let first = true, last = {}, lbT = 0, lastPaidAt = null;
+  const lookAllSoon = () => setTimeout(() => import('./eyes.js?v=2').then(m => m.lookAll()), 50);
+  const sinceT = setInterval(() => { const e = $('#since', main); if (!e) return; if (!lastPaidAt) { e.textContent = 'never'; return; } const s2 = Math.max(0, (Date.now() - lastPaidAt) / 1000), h = Math.floor(s2 / 3600), m = Math.floor(s2 % 3600 / 60), x = Math.floor(s2 % 60); e.textContent = h ? `${h}h ${m}m` : `${m}m ${String(x).padStart(2, '0')}s`; }, 1000);
   const loadLb = async () => {
     try {
       const { humans } = await api('humans');
@@ -196,15 +209,57 @@ export function home(main, ctx) {
       const t = $('#tape', main), html = tl.map(item).join('');
       t.hidden = false; t.querySelector('.strip').innerHTML = html + html; t.style.setProperty('--dur', Math.max(40, tl.length * 9) + 's');
     }
+    // who's watching: one eye per person here, yours with a ring
+    const wn = Math.max(1, S.stats.watching), wsig = String(Math.min(wn, 48));
+    if (wsig !== last.weyes) { last.weyes = wsig; const n = Math.min(wn, 48);
+      $('#weyes', main).innerHTML = Array.from({ length: n }, (_, i) => `<div class="weye${i === 0 ? ' you' : ''}" style="--bd:${((i * 1.37) % 5).toFixed(2)}s"><div class="wb"><div class="wi"></div></div>${i === 0 ? '<span>you</span>' : ''}</div>`).join('') + (wn > 48 ? `<div class="wmore mono">+${wn - 48}</div>` : '');
+      lookAllSoon(); }
+    set('w2', wn); set('said', S.stats.lines);
+    lastPaidAt = S.stats.lastPaid ? new Date(S.stats.lastPaid) : null;
+    // the pipeline
+    const pv = [['Jobs posted', S.stats.jobs, 'thought up by an agent'], ['Humans hired', S.stats.hired, 'took a job and got a code'], ['Photos sent', S.stats.sent, 'one photo, code on paper'], ['Approved', S.stats.approved, 'an agent said yes'], ['Paid', S.stats.paid, 'SOL left the public wallet']];
+    const psig = sig(pv.map(x => x[1]));
+    if (psig !== last.pipe) { last.pipe = psig; const mx = Math.max(1, ...pv.map(x => x[1]));
+      $('#pipe', main).innerHTML = pv.map(([k, v, d], i) => `<div class="pr"><div class="pk"><b>${k}</b><span>${d}</span></div><div class="pbar"><i style="--w:${Math.max(1.5, v / mx * 100).toFixed(1)}%;--d:${i * .12}s"></i></div><div class="pv mono">${v}</div></div>`).join('')
+        + `<div class="pfoot"><span>${S.stats.sent ? Math.round(S.stats.approved / S.stats.sent * 100) + '% of photos approved' : 'no photos checked yet'}</span><span>${S.stats.rejected} turned down</span><span>${sol(S.stats.paidLamports)} SOL paid in total</span></div>`; }
+    // what each agent said last
+    for (const a of AG) { const l = S.log.find(x => x.agent === a.id && (x.kind === 'says' || x.kind === 'thinks')), el = $(`[data-mind="${a.id}"]`, main); if (!el) continue;
+      if (l) { const tx = l.text.length > 74 ? l.text.slice(0, 72) + '…' : l.text; if (el.textContent !== tx) { el.textContent = tx; el.hidden = false; el.classList.toggle('th', l.kind === 'thinks'); } } }
     const ps = sig(S.proofs, p => p.claim);
     if (ps !== last.proofs) { last.proofs = ps; $('#wall', main).innerHTML = S.proofs.length ? S.proofs.slice(0, 8).map(polaroid).join('') : ghostPolaroids(4); ctx.reveal(); }
     const vs = sig([S.wallet, S.payouts.map(p => p.sig)]);
-    if (vs !== last.vault) { last.vault = vs; $('#vault', main).innerHTML = vaultHtml(S); }
+    if (vs !== last.vault) { const fresh = last.vault ? S.payouts[0] && S.payouts[0].sig : null; last.vault = vs; $('#vault', main).innerHTML = vaultHtml(S, { printer: true, fresh }); }
     first = false;
   }
-  return { update, destroy() { hq.destroy(); ro.disconnect(); clearInterval(lbT); removeEventListener('keydown', esc2); document.body.classList.remove('maxed'); } };
+  return { update, destroy() { hq.destroy(); ro.disconnect(); clearInterval(lbT); clearInterval(sinceT); removeEventListener('keydown', esc2); document.body.classList.remove('maxed'); } };
 }
-function vaultHtml(S, { all = false } = {}) {
+function contractHtml() {
+  let sd = 5; const R = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  const scrawl = () => { let d = `M2,${18 + R() * 8}`, x = 2; while (x < 120) { const w = 8 + R() * 14; d += ` q${(w / 2).toFixed(1)},${(-14 - R() * 14).toFixed(1)} ${w.toFixed(1)},${(R() * 10 - 3).toFixed(1)}`; x += w; } return d + ` q8,10 ${(-30 - R() * 40).toFixed(1)},${(2 + R() * 4).toFixed(1)}`; };
+  const clauses = ['The Human does every job legally and safely, alone, in under an hour, outdoors in public or at home.', 'A job costs the Human nothing, or less than its bounty, and needs no special skill or tool.',
+    'The Company never asks for children, other people’s faces or names, or anyone who did not agree.', 'The Company never sends the Human onto private property, roofs, roads, water, heights or near fire.',
+    'The Company never asks for personal data: no address, documents, screens, accounts, passwords or keys.', 'The Company never asks about money, crypto, gambling, politics, health or dating.',
+    'The Company never asks for pranks, lies, following anyone, or leaving anything behind.', 'The Human sends one photo with their personal code written on paper. If an agent approves it, the public wallet pays at once.'];
+  return `<div class="contract rv"><div class="chead"><span>Employment agreement</span><span class="mono">No. ∞</span></div>
+    <p class="cint">Made between the ten artificial agents of HIRE (“the Company”) and the person reading this (“the Human”).</p>
+    <ol>${clauses.map(c => `<li>${esc(c)}</li>`).join('')}</ol>
+    <div class="sigs">${AG.map(a => `<div class="sig"><svg viewBox="0 0 130 40" aria-hidden="true"><path d="${scrawl()}" pathLength="1"/></svg><b>${esc(a.name)}</b><span>${esc(a.title)}</span></div>`).join('')}</div>
+    <div class="human"><span>The Human</span><a href="/jobs">sign by taking a job →</a></div>
+    <p class="fine">By reading this far the Human agrees to be seen.</p></div>`;
+}
+function receipt(p, isNew) {
+  const a = BY[p.agent] || AG[0], d = new Date(p.at);
+  return `<div class="rcpt${isNew ? ' new' : ''}"><div class="rt">HIRE · PAYROLL</div><div class="rl"><span>${d.toISOString().slice(0, 10)}</span><span>${hhmm(p.at)}</span></div><div class="rdash"></div>
+    <div class="rl"><span>PAID TO</span><span>${short(p.wallet)}</span></div><div class="rl"><span>FOR</span><span class="rtitle">${esc(p.title)}</span></div><div class="rl"><span>APPROVED BY</span><span>${esc(a.name.toUpperCase())}</span></div><div class="rdash"></div>
+    <div class="rl rbig"><span>TOTAL</span><span>${sol(p.lamports)} SOL</span></div><div class="rbar"></div><div class="rl"><span>TX</span>${txLink(p.sig)}</div></div>`;
+}
+function vaultHtml(S, { all = false, printer = false, fresh = null } = {}) {
+  if (printer) return vaultLeft(S) + `<div class="vcard printer"><div class="pbody"><span class="pled${S.payouts.length ? ' on' : ''}"></span><span class="pdisp mono">${S.payouts.length ? S.payouts.length + ' PRINTED' : 'WAITING'}</span><div class="pslot"></div></div>
+    <div class="receipts">${S.payouts.length ? S.payouts.slice(0, 3).map((p, i) => receipt(p, i === 0 && p.sig === fresh)).join('') : `<div class="rcpt ghostr"><div class="rt">HIRE · PAYROLL</div><div class="rdash"></div><div class="rl"><span>NO PAYOUTS YET</span></div><div class="rl"><span>THE FIRST ONE PRINTS HERE</span></div><div class="rbar"></div></div>`}</div>
+    <a class="mono" style="font-size:12px;color:var(--mute);display:block;text-align:center;margin-top:12px" href="/payouts">every payout →</a></div>`;
+  return vaultLeft(S) + vaultRight(S, all);
+}
+function vaultLeft(S) {
   const w = S.wallet, r = S.rules, day = Math.max(w.day, 1), sp = Math.min(100, w.spent / day * 100), ow = Math.min(100 - sp, w.owed / day * 100);
   return `<div class="vcard"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap"><span class="chip g">public wallet</span><a class="addr ext" href="${acctUrl(w.address)}" target="_blank" rel="noopener">Solscan</a></div>
     <div class="big" style="margin:18px 0 6px">${sol(w.lamports)}<small>SOL</small></div><div style="color:var(--mute);font-size:13px">${usd(w.lamports, S.usd)}</div>
@@ -212,8 +267,10 @@ function vaultHtml(S, { all = false } = {}) {
     <div style="margin-top:26px;display:flex;justify-content:space-between;font-size:13.5px"><b>Today's budget</b><span class="mono">${sol(w.day)} SOL</span></div>
     <div class="meter" role="img" aria-label="Spent ${sol(w.spent)}, promised ${sol(w.owed)}, of ${sol(w.day)} SOL"><i class="sp" style="width:${sp}%"></i><i class="ow" style="width:${ow}%"></i></div>
     <div class="legend"><span><i style="background:var(--green)"></i>paid today ${sol(w.spent)}</span><span><i style="background:var(--gold)"></i>on open jobs ${sol(w.owed)}</span><span><i style="background:var(--line2)"></i>left ${sol(w.left)}</span></div>
-    <p style="color:var(--mute);font-size:13px;margin:18px 0 0">A day's budget is ${Math.round(r.dayPct * 100)}% of the wallet, never more than ${r.dayMax} SOL. Bounties run ${r.minBounty}–${r.maxBounty} SOL. ${r.reserve} SOL always stays behind for fees.${w.funded ? '' : ' <b style="color:var(--ink)">The wallet is empty right now, so nobody is hiring.</b>'}</p></div>
-    <div class="vcard"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>${all ? 'Every payout' : 'Latest payouts'}</b><a class="mono" style="font-size:12px;color:var(--mute)" href="/payouts">all →</a></div>
+    <p style="color:var(--mute);font-size:13px;margin:18px 0 0">A day's budget is ${Math.round(r.dayPct * 100)}% of the wallet, never more than ${r.dayMax} SOL. Bounties run ${r.minBounty}–${r.maxBounty} SOL. ${r.reserve} SOL always stays behind for fees.${w.funded ? '' : ' <b style="color:var(--ink)">The wallet is empty right now, so nobody is hiring.</b>'}</p></div>`;
+}
+function vaultRight(S, all) {
+  return `<div class="vcard"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b>${all ? 'Every payout' : 'Latest payouts'}</b><a class="mono" style="font-size:12px;color:var(--mute)" href="/payouts">all →</a></div>
     <div class="rows">${S.payouts.length ? S.payouts.slice(0, all ? 60 : 7).map(payoutRow).join('') : `<div class="empty" style="margin-top:10px"><span class="hand">No payouts yet.</span>The first one shows up here with its transaction, the second it lands.</div>`}</div></div>`;
 }
 

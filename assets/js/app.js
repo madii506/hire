@@ -1,23 +1,26 @@
 // HIRE · the app: one shared poll of the company's state, a tiny router, the header, and the clocks.
-import { markSvg, face } from './blob.js?v=1';
-import * as W from './wallet.js?v=1';
-import { $, $$, api, post, short, until, copy, ensureWallet, esc } from './ui.js?v=1';
-import * as P from './pages.js?v=1';
+import { markSvg, face } from './blob.js?v=2';
+import { eyeField, lookAll } from './eyes.js?v=2';
+import * as W from './wallet.js?v=2';
+import { $, $$, api, post, short, until, copy, ensureWallet, esc } from './ui.js?v=2';
+import * as P from './pages.js?v=2';
 
 const main = $('#main');
 
-// ---- the intro: once per visit, on the home page, skippable with a click or a key
+// ---- the intro: a walk into HIRE HQ, once per visit, on the home page. click or any key skips it
 (() => {
   const intro = document.getElementById('intro'); if (!intro) return;
-  let seen = false; try { seen = sessionStorage.getItem('hire:intro') === '1'; sessionStorage.setItem('hire:intro', '1'); } catch {}
-  if (seen || location.pathname !== '/' || matchMedia('(prefers-reduced-motion: reduce)').matches) { intro.remove(); return; }
+  let seen = false; try { seen = sessionStorage.getItem('hire:intro') === '1'; } catch {}
+  const gl = (() => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; } })();
+  if (seen || location.pathname !== '/' || !gl || matchMedia('(prefers-reduced-motion: reduce)').matches) { intro.remove(); return; }
+  try { sessionStorage.setItem('hire:intro', '1'); } catch {}
   document.body.classList.add('intro-on');
-  let done = false;
-  const end = fast => { if (done) return; done = true; document.body.classList.remove('intro-on'); if (fast) { intro.classList.add('skip'); setTimeout(() => intro.remove(), 320); } else intro.remove(); removeEventListener('keydown', key); };
-  const key = () => end(true);
-  intro.addEventListener('click', () => end(true)); addEventListener('keydown', key);
-  setTimeout(() => { document.body.classList.remove('intro-on'); }, 2900);
-  setTimeout(() => end(false), 3600);
+  let started = false;
+  const end = () => { document.body.classList.remove('intro-on'); if (intro.isConnected) { intro.classList.add('skip'); setTimeout(() => intro.remove(), 320); } };
+  const giveUp = setTimeout(() => { if (!started) end(); }, 7000);          // slow connection: straight to the site
+  intro.addEventListener('click', () => { if (!started) { clearTimeout(giveUp); end(); } });
+  import('./intro3d.js?v=2').then(m => { if (!intro.isConnected) return; started = true; clearTimeout(giveUp); m.play(intro, () => document.body.classList.remove('intro-on')); })
+    .catch(() => { clearTimeout(giveUp); end(); });
 })();
 let S = null, view = null, pollT = 0;
 const ctx = { S: () => S, go, reveal };
@@ -39,7 +42,7 @@ function payPill(S) {
 }
 async function poll() {
   clearTimeout(pollT);
-  try { S = await api('state'); if (view && view.update) view.update(S); live(true); payPill(S); }
+  try { S = await api('state'); if (view && view.update) view.update(S); live(true); payPill(S); lookAll(); }
   catch { live(false); }
   pollT = setTimeout(poll, document.hidden ? 30000 : 5000);
 }
@@ -109,3 +112,4 @@ $('#wbtn').addEventListener('click', async () => { if (W.current()) return go('/
 W.onChange(wbtn); W.onWallets(() => { W.resume(); });
 $('.brand').insertAdjacentHTML('afterbegin', markSvg(34));
 wbtn(); render(); poll(); setTimeout(() => W.resume(), 400);
+{ const ef = document.getElementById('eyefield'); if (ef) eyeField(ef); }
