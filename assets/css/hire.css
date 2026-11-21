@@ -6,7 +6,7 @@
   --bg:#000;--bg1:#070707;--bg2:#0d0d0d;--l:#1f1f1f;--l2:#353535;--l3:#4c4c4c;
   --fg:#ecebe5;--fg2:#c4c3bc;--dim:#8d8c86;--faint:#5b5a55;--amb:#ffb000;--amb2:#b37b00;
   --m:JBM,ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
-  --top:46px;--bot:62px;--pad:clamp(14px,2.6vw,30px);
+  --top:46px;--bot:38px;--pad:clamp(14px,2.6vw,30px);
 }
 *{box-sizing:border-box}
 html{background:#000;color-scheme:dark;-webkit-text-size-adjust:100%;overflow-x:hidden;scroll-padding-top:calc(var(--top) + 12px);scroll-padding-bottom:calc(var(--bot) + 12px)}
@@ -67,6 +67,9 @@ a.u:hover{text-decoration-color:var(--amb);color:var(--fg)}
 .cliout .in{color:var(--amb)}
 .cliout .er{color:var(--fg);background:#3a0d0d;padding:0 4px}
 .cliout a{text-decoration:underline;text-underline-offset:3px}
+.cliout .tb{display:block;white-space:pre;overflow-x:auto;word-break:normal}
+.cliout .h{color:var(--faint)}
+.cliout .a{color:var(--amb)}
 .cliout .x{position:sticky;top:0;float:right;border:1px solid var(--l2);background:#000;padding:0 7px;color:var(--dim);font-size:12px}
 
 /* ------------------------------------------------------------------ layout pieces */
@@ -589,7 +592,7 @@ ul.jl li::before{content:"· ";color:var(--faint)}
   .tstat{display:none}
 }
 @media (max-width:640px){
-  :root{--top:44px;--bot:61px}
+  :root{--top:44px;--bot:38px}
   body{font-size:13.5px}
   .brand{padding-right:12px;letter-spacing:.1em}
   .brand span{display:none}
