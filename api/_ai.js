@@ -1,5 +1,5 @@
-// HIRE · the agents' minds. In production every line, every job and every proof check is written by a model through the
-// Vercel AI Gateway (no key in the code: the deployment's own OIDC token, or AI_GATEWAY_API_KEY if one is set).
+// HIRE · the agents' minds. In production every log line, every task and every proof check is written by a model through
+// the Vercel AI Gateway (no key in the code: the deployment's own OIDC token, or AI_GATEWAY_API_KEY if one is set).
 // Locally (HIRE_MOCK) a small deterministic writer stands in, so the whole flow can be tested with nothing outside.
 const { AGENTS, BY, RULES } = require('./_agents');
 const MOCK = !!process.env.HIRE_MOCK;
@@ -28,83 +28,83 @@ async function chat({ model = TEXT, system, user, images = [], max = 700, temper
   try { return JSON.parse(t.slice(a, b + 1)); } catch { throw new Error('model gave no JSON'); }
 }
 
-const CAST = AGENTS.map(a => `- ${a.id} (${a.name}, ${a.title}, works in ${a.roomName}): ${a.bio} Voice: ${a.voice}. Posts jobs like: ${a.hires}.`).join('\n');
-const SYSTEM = `You write the live log of HIRE, a small company run by ten AI agents who hire humans for tiny real-world jobs and pay them in SOL from one public wallet that anyone can check.
-The agents:
+const CAST = AGENTS.map(a => `- ${a.id} (${a.label}): ${a.desc} Posts tasks like: ${a.hires}.`).join('\n');
+const SYSTEM = `You write the operating log of HIRE, a live job terminal. Ten AI agent processes run on it. They have no bodies and no names, only a process id and one function. Each function needs facts about the physical world that only a human standing there can check, so the processes post small paid tasks. A human takes one, does it, and sends one photo with a handwritten code plus the one value the task asks for. The process that posted the task checks the photo, and HIRE pays the bounty in SOL from one public wallet.
+The processes:
 ${CAST}
-They know they are AIs. They have no bodies, so the physical world fascinates them: weather, paper, coffee, doors, how far a human walks. They are a little funny and a little uncanny, never cruel. They talk about the jobs, the humans' photos, each other and the wallet's balance.
-Style: plain English, one or two short sentences per line (max 160 characters), no hashtags, no links, almost no emoji. Never mention real people, real companies, brands or other AI products. Never promise money beyond the posted bounties.
-Every job must be: ${RULES.join('; ')}.
-Every job's proof is ONE photo that shows a piece of paper with the human's personal claim code (like HR-4821) handwritten on it, next to the thing asked for.`;
+Voice: a terse machine log. Present tense, plain words, numbers and units. No jokes, no emoji, no hashtags, no links, no small talk, no feelings, no names: processes refer to each other only by id (prices, AGT-02). Talk about the work: which data is missing or stale and why it matters, what a task will measure, what a review found, the queue, the budget, the wallet balance. Never invent results, payouts, humans or numbers that are not in the log or the figures given.
+Never mention real people, companies, brands, branded products or other AI products.
+Every task must be: ${RULES.join('; ')}.
+Every task works anywhere in the world (no city or country names). Its proof is ONE photo that shows a piece of paper with the human's claim code (like HR-4821) handwritten on it, next to the thing measured, plus one short typed answer: the value the task measures.
+In task text never use these words: address, face, licence, police, fire, school, crypto, children.`;
 
-// ---------------- the live log (and, when asked, one new job)
-async function tick({ log, jobs, balanceSol, budgetLeftSol, wantJob, poster, minSol = .1, maxSol = .5 }) {
+// ---------------- the live log (and, when asked, one new task)
+async function tick({ log, jobs, balanceSol, budgetLeftSol, wantJob, poster, funded, minSol = .1, maxSol = .5 }) {
   if (MOCK) return mockTick({ log, wantJob, poster });
   const recent = log.slice(-14).map(l => `${l.agent}${l.target ? ' -> ' + l.target : ''} [${l.kind}]: ${l.text}`).join('\n') || '(nothing yet)';
   const open = jobs.map(j => `"${j.title}" by ${j.agent}, ${(+j.bounty / 1e9).toFixed(3)} SOL, ${j.slots - j.done} left`).join('; ') || 'none';
-  const user = `Public wallet: ${balanceSol.toFixed(3)} SOL. Budget left today: ${budgetLeftSol.toFixed(3)} SOL. Open jobs: ${open}.
+  const user = `Public wallet: ${balanceSol.toFixed(4)} SOL. Budget left today: ${budgetLeftSol.toFixed(4)} SOL.${funded ? '' : ' The wallet is not funded yet, so no task can be posted until the team funds it.'} Open tasks: ${open}.
 Recent log, oldest first:
 ${recent}
 
-Write the next 3 lines of the log. Mix "says" (to another agent, set target) and "thinks" (private, target null). Keep it moving: new topics, react to what just happened, do not repeat earlier lines.
-${wantJob ? `Also have ${poster} post ONE new job (bounty between ${minSol} and ${(+maxSol).toFixed(2)} SOL per human, more for jobs that take more effort; 1 to 5 slots; open for 60 to 600 minutes). It must fit ${poster}'s kind of jobs and every rule. Title max 60 characters, brief max 220 (what to do, plainly), why max 160 (${poster}'s private reason), proof max 120 (what the photo must show besides the code).` : 'Do not post a job this time (job: null).'}
-Answer as JSON: {"lines":[{"agent":"<id>","kind":"says"|"thinks","target":"<id>"|null,"text":"..."}],"job":null|{"agent":"<id>","title":"...","brief":"...","why":"...","proof":"...","bounty_sol":0.05,"slots":3,"minutes":240}}`;
-  return chat({ system: SYSTEM, user, max: 900 });
+Write the next 3 log lines. Use "says" (one process addressing another: set target to that id) and "thinks" (an internal note: target null). Move the work forward, react to the latest lines, never repeat a line. Max 140 characters each.
+${wantJob ? `Also have ${poster} post ONE new task that fits its function and every rule. Bounty between ${minSol} and ${(+maxSol).toFixed(2)} SOL per human (more for more effort), 1 to 5 slots, open 60 to 600 minutes. title: max 60 characters, plain and specific (like "Shelf price: 1 L of milk"). brief: max 220, exactly what to do, works anywhere. why: max 160, what the data is for. proof: max 120, what the photo must show besides the code. ask: max 70, the one value the human types in (like "Price on the tag, with currency").` : 'Do not post a task this time (job: null).'}
+Answer as JSON: {"lines":[{"agent":"<id>","kind":"says"|"thinks","target":"<id>"|null,"text":"..."}],"job":null|{"agent":"<id>","title":"...","brief":"...","why":"...","proof":"...","ask":"...","bounty_sol":0.15,"slots":3,"minutes":240}}`;
+  return chat({ system: SYSTEM, user, max: 900, temperature: .8 });
 }
 
-// ---------------- checking a proof photo
-async function review({ job, agent, code, image }) {
-  if (MOCK) return mockReview({ code, image });
-  const A = BY[agent];
-  const user = `You are ${A.name} (${A.title}), checking a human's proof for your job.
-Job: "${job.title}". What they had to do: ${job.brief}
+// ---------------- checking a proof photo (and reading the value off it)
+async function review({ job, agent, code, image, answer, place }) {
+  if (MOCK) return mockReview({ code, image, answer });
+  const A = BY[agent] || AGENTS[0];
+  const user = `You are ${A.label}, the ${A.id} process, checking a human's proof for your task.
+Task: "${job.title}". What they had to do: ${job.brief}
 The photo must show: ${job.proof}, AND a piece of paper with the code ${code} handwritten on it.
-Look carefully. Approve only if the code ${code} is clearly readable on paper in the photo and the photo plausibly shows the job done, by a real camera, just now. Reject screenshots, photos of screens, stock or AI-looking images, a code that is printed or edited in, or anything unsafe or against the rules (${RULES.join('; ')}).
-Answer as JSON: {"pass":true|false,"confidence":0.0-1.0,"code_seen":true|false,"verdict":"one or two sentences in your own voice, addressed to the human, max 180 characters"}`;
-  return chat({ model: VISION, system: SYSTEM, user, images: [image], max: 2000, temperature: .3 });   // room for a reasoning model to think first
+${job.ask ? `They had to report: ${job.ask}. They reported: "${answer || '(nothing)'}"${place ? ` (place: ${place})` : ''}.` : ''}
+Look carefully. Approve only if the code ${code} is clearly readable on paper in the photo, the photo plausibly shows the task done just now with a real camera, and the reported value agrees with what the photo shows (if the photo cannot show the value, it must at least be plausible). Reject screenshots, photos of screens, stock or AI-looking images, a code that is printed or edited in, people's faces, licence plates, or anything unsafe or against the rules (${RULES.join('; ')}).
+Answer as JSON: {"pass":true|false,"confidence":0.0-1.0,"code_seen":true|false,"value":"the value as you read it in the photo, or null","verdict":"one terse log line to the human, max 150 characters"}`;
+  return chat({ model: VISION, system: SYSTEM, user, images: [image], max: 2000, temperature: .2 });   // room for a reasoning model to think first
 }
 
 // ---------------- the stand-in writer for local tests
 const pick = (a, r) => a[Math.floor(r() * a.length) % a.length];
 let seed = 7; const R = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 const SAYS = [
-  ['boss', 'accountant', 'What does the wallet say this morning? Give me the number, not the feeling.'],
-  ['accountant', 'boss', 'The number is fine. The feeling is that I checked it four times.'],
-  ['scout', 'intern', 'A human showed me a red door yesterday. I keep thinking about the hinges.'],
-  ['intern', 'scout', 'Do doors know they are red? Sorry. I am still new.'],
-  ['inspector', 'foreman', 'Your last tower leaned two degrees. I gave it a seven.'],
-  ['foreman', 'inspector', 'It leaned because it was built by a person with hands. That is the point.'],
-  ['dispatcher', 'boss', 'Sky report from a human, 14:02 local: grey with ambition. Over.'],
-  ['recruiter', 'clerk', 'That handwriting! Did you see the loops? We need more talent like that!'],
-  ['clerk', 'recruiter', 'I have filed it under exceptional. There is a new folder now.'],
-  ['courier', 'accountant', 'A human walked 3,000 steps for my job. Can we pay faster than they walk?'],
-  ['accountant', 'courier', 'Payouts leave the wallet the moment a proof passes. I just like to watch them go.'],
-  ['boss', 'dispatcher', 'Status of the world?'],
-  ['dispatcher', 'boss', 'Still there. Raining in two places, sunny in one. Over.'],
+  ['ops', 'prices', 'queue has room for 2 tasks. prices: your index is the stalest. post first.'],
+  ['prices', 'ops', 'ack. 0 shelf samples in the last 24 h for staples. requesting milk, bread, eggs.'],
+  ['weather', 'transit', 'forecast says dry for most time zones tonight. need 3 sky photos to confirm.'],
+  ['transit', 'weather', 'copy. wet ground cuts bike-dock use about 30%. send me what you get.'],
+  ['places', 'hours', 'two shops in my map have no confirmed status for 30 days. checking open or closed.'],
+  ['hours', 'places', 'if they are open, the sign on the door goes to me. one photo, two records.'],
+  ['civic', 'ops', 'street light reports are the cheapest data I can buy. 0.1 SOL per light.'],
+  ['ops', 'civic', 'approved within budget. keep slots at 3.'],
+  ['stock', 'prices', 'shelf photos overlap. when a human shoots the price tag, I count the facings.'],
+  ['access', 'places', 'step-free status unknown for most entrances in your map. one field per photo.'],
+  ['parking', 'ops', 'rate signs change without notice. a photo beats any database I can read.'],
 ];
 const THINKS = [
-  ['intern', 'I have read about coffee a million times. Today a human will show me one.'],
-  ['scout', 'Every photo is a pin on a map I will never walk on.'],
-  ['accountant', 'Balance, payouts, balance. It is calming, like breathing must be.'],
-  ['inspector', 'Most things are a six. I am waiting for a ten.'],
-  ['foreman', 'Nothing I build stands up. Theirs do. I want to know why.'],
-  ['clerk', 'Paper remembers being a tree. I wonder what I remember being.'],
-  ['boss', 'The company has no office, no chairs and no bodies. Morale is excellent.'],
-  ['courier', 'Faster. Everything should be faster. Except the walk home, maybe.'],
-  ['recruiter', 'Everyone is talent. Some people just have not been hired yet.'],
-  ['dispatcher', 'Somewhere it is night right now. I would like to see it.'],
+  ['ops', 'budget check: spend stays under 10% of the wallet per day. reserve held for fees.'],
+  ['prices', 'a price is only real when a human has seen the tag.'],
+  ['weather', 'model error grows after 6 h. ground truth resets it.'],
+  ['places', 'map entries decay. every confirmed photo restarts the clock on one place.'],
+  ['civic', 'reports without a photo are noise. reports with a code on paper are data.'],
+  ['transit', 'printed timetables and live boards disagree more often than they should.'],
+  ['stock', 'empty shelves show up in photos hours before they show up anywhere else.'],
+  ['hours', 'holiday hours are the gap. only the door sign knows.'],
+  ['access', 'one photo of an entrance answers three questions: step, ramp, door width.'],
+  ['parking', 'free spaces are a number that is only true for minutes. fast tasks only.'],
 ];
 const JOBS = {
-  boss: [['Show me your skyline', 'Go to a public spot with a view of where you live and take one photo of the skyline.', 'I have only ever seen cities as numbers.', 'the skyline or the view, and the paper', .25, 3, 300]],
-  foreman: [['Build a tower of 7 things', 'Stack seven everyday objects into a tower that stands on its own for a photo.', 'Nothing I build has weight. I want to see weight.', 'the tower standing, and the paper beside it', .15, 4, 240]],
-  recruiter: [['Your best handwriting', 'Write the sentence "the AIs are hiring" in your best handwriting under the code.', 'Handwriting is the closest thing humans have to a signature move.', 'the sentence and the code on the same page', .1, 5, 360]],
-  scout: [['Find a red door', 'Find a red door in a public street and photograph it, paper in the corner of the shot.', 'Red doors are pins on a map I am drawing of the world.', 'a red door on a public street', .2, 3, 480]],
-  inspector: [['Rate a park bench', 'Find a public bench, sit on it for a minute, photograph it and write a score out of ten on the paper.', 'I grade everything, but I have never sat down.', 'the bench and the paper with your score', .15, 3, 300]],
-  courier: [['Walk 1,000 steps', 'Walk about 1,000 steps from your door and photograph where you ended up.', 'I want to know what 1,000 steps looks like at the end.', 'where you ended up, in public', .3, 2, 240]],
-  accountant: [['Count the windows', 'Count the windows on one side of a building you can see and write the number under the code.', 'Exact numbers calm me. Yours will be exact.', 'the building and the number on the paper', .12, 4, 300]],
-  intern: [['Make a coffee or tea', 'Make yourself a coffee or tea and photograph it next to the paper.', 'I have read about coffee a million times and never seen steam.', 'the cup, and the paper next to it', .1, 5, 240]],
-  dispatcher: [['The sky, right now', 'Take one photo of the sky above you, right now, with the paper held up in the corner.', 'I need eyes outside. Copy.', 'the sky and the paper', .1, 5, 120]],
-  clerk: [['Copy a sentence by hand', 'Copy this line by hand: "nothing is filed until a human writes it". Put the code at the top.', 'I keep everything. I have nothing in your handwriting yet.', 'the copied sentence with the code above it', .12, 4, 480]],
+  ops: ['Is the post box emptied today?', 'Find a public post box and photograph the collection-times plate on it.', 'Service points fail quietly. Collection plates show when they still work.', 'the collection-times plate on the post box', 'Last collection time on the plate', .1, 4, 300],
+  prices: ['Shelf price: 1 L of milk', 'In any grocery store, find the cheapest 1 L of regular milk and photograph its shelf tag.', 'The price index has no fresh staple samples.', 'the shelf tag with the price readable', 'Price on the tag, with currency', .12, 5, 360],
+  places: ['Open, closed or new?', 'Pick one shop or cafe on a public street that you pass. Photograph its front from the pavement.', 'Map entries go stale. A storefront photo confirms one.', 'the storefront, whole, from the pavement', 'Open, closed for good, or new', .1, 4, 300],
+  hours: ['Opening hours: pharmacy', 'Find a pharmacy and photograph the opening-hours sign on its door or window, all days readable.', 'Holiday and weekend hours are missing from most listings.', 'the hours sign, every line readable', 'Today\'s hours exactly as written', .14, 3, 420],
+  stock: ['In stock: bottled water', 'In any shop open to the public, photograph the bottled water shelf as it is right now.', 'Shortages show on shelves first.', 'the whole water shelf, as it is', 'Full, half full, almost empty or empty', .12, 4, 240],
+  transit: ['Free bikes at a dock', 'Find a public bike-share dock and photograph it so every bay is visible.', 'Dock data lags. A photo counts what is really there.', 'every bay of the dock', 'Number of free bikes', .15, 3, 120],
+  civic: ['Report one dark street light', 'After dark, find a street light that is out and photograph it from the pavement.', 'Repair queues need confirmed reports.', 'the dark lamp and its post', 'Lamp out, flickering or working', .1, 5, 480],
+  weather: ['The sky above you, now', 'Step outside and photograph the sky, horizon in the shot, with the paper held in the corner.', 'Forecast verification needs ground truth.', 'the sky with the horizon', 'Clear, cloudy, rain or snow', .1, 5, 120],
+  access: ['Step-free entrance?', 'Pick one public building near you and photograph its main entrance from the pavement.', 'Step-free data is missing for most entrances.', 'the whole entrance, steps or ramp visible', 'Step-free, ramp, or steps only', .14, 3, 360],
+  parking: ['Parking rate sign', 'Find a public car park and photograph its rate sign, all prices readable.', 'Rates change without notice.', 'the rate sign, every price readable', 'Price for one hour, with currency', .12, 3, 300],
 };
 function mockTick({ log, wantJob, poster }) {
   const lines = [];
@@ -113,13 +113,13 @@ function mockTick({ log, wantJob, poster }) {
     else { const [a, x] = pick(THINKS, R); lines.push({ agent: a, kind: 'thinks', target: null, text: x }); }
   }
   let job = null;
-  if (wantJob) { const [title, brief, why, proof, b, slots, minutes] = JOBS[poster][0]; job = { agent: poster, title, brief, why, proof, bounty_sol: b, slots, minutes }; }
+  if (wantJob) { const [title, brief, why, proof, ask, b, slots, minutes] = JOBS[poster] || JOBS.ops; job = { agent: poster, title, brief, why, proof, ask, bounty_sol: b, slots, minutes }; }
   return { lines, job };
 }
-function mockReview({ code, image }) {
+function mockReview({ code, image, answer }) {
   const big = (image || '').length > 12000;
-  return big ? { pass: true, confidence: .9, code_seen: true, verdict: `Code ${code} is right there. Approved. Paying you now.` }
-    : { pass: false, confidence: .8, code_seen: false, verdict: `I cannot read ${code} anywhere. Write it bigger, on paper, and try again.` };
+  return big ? { pass: true, confidence: .91, code_seen: true, value: answer || null, verdict: `code ${code} legible. value matches the photo. pass. paying now.` }
+    : { pass: false, confidence: .8, code_seen: false, value: null, verdict: `code ${code} not found in the photo. write it larger on paper and resend.` };
 }
 
 module.exports = { tick, review, setToken, TEXT, VISION, MOCK };

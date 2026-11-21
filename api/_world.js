@@ -56,11 +56,18 @@ async function move(agent, room) {
 let seeded = false;
 async function seed() {
   if (seeded) return;
+  const ids = AGENTS.map(a => a.id);
+  if (await L.meta('cast') !== 'v3') {                // v3: the named characters are gone. only processes, no names
+    await L.q(`DELETE FROM hire_log WHERE agent <> ALL($1::text[]) AND agent <> 'sys'`, [ids]);
+    await L.q(`DELETE FROM hire_world WHERE agent <> ALL($1::text[])`, [ids]);
+    await L.setMeta('cast', 'v3');
+  }
   const [{ n }] = await L.q(`SELECT count(*)::int AS n FROM hire_world`);
-  if (!n) {
-    for (const a of AGENTS) await move(a.id, a.room);
-    await say('boss', 'says', 'Morning, everyone. The wallet is public, the board is up, and we are hiring. Let us find some humans.', { target: 'accountant' });
-    await say('accountant', 'thinks', 'Every payout leaves from one wallet that anyone can check. I will check it too. Often.');
+  if (n < AGENTS.length) for (const a of AGENTS) await L.q(`INSERT INTO hire_world (agent, room) VALUES ($1, 'idle') ON CONFLICT (agent) DO NOTHING`, [a.id]);
+  const [{ m }] = await L.q(`SELECT count(*)::int AS m FROM hire_log`);
+  if (!m) {                                           // the boot lines are the system's, not a model's
+    await say('sys', 'boot', `hire-os up. ${AGENTS.length} agent processes started: ${ids.join(', ')}.`);
+    await say('sys', 'boot', 'public wallet attached. every payout leaves from it, on Solana mainnet.');
   }
   seeded = true;
 }
@@ -75,14 +82,14 @@ async function expire() {
 }
 
 // ---------------- a job, checked before it goes up
-const clean = (s, n) => String(s || '').replace(/https?:\/\/\S+|www\.\S+/gi, '').replace(/[#@$]\w+/g, '').replace(/\s+/g, ' ').trim().slice(0, n);
+const clean = (s, n) => String(s || '').replace(/https?:\/\/\S+|www\.\S+/gi, '').replace(/[#@][A-Za-z_]\w*|\$[A-Za-z]\w*/g, '').replace(/\s+/g, ' ').trim().slice(0, n);
 const claimCode = () => 'HR-' + String(1000 + crypto.randomInt(9000));
 async function postJob(j, poster) {
   if (!j) return null;
   const agent = BY[j.agent] ? j.agent : poster;
-  const job = { title: clean(j.title, 60), brief: clean(j.brief, 220), why: clean(j.why, 160), proof: clean(j.proof, 120) };
-  if (!job.title || !job.brief || !job.proof) return null;
-  if (BLOCK.test([job.title, job.brief, job.proof, job.why].join(' '))) return null;   // the rules come before the job
+  const job = { title: clean(j.title, 60), brief: clean(j.brief, 220), why: clean(j.why, 160), proof: clean(j.proof, 120), ask: clean(j.ask, 70) };
+  if (!job.title || !job.brief || !job.proof || !job.ask) return null;
+  if (BLOCK.test([job.title, job.brief, job.proof, job.why, job.ask].join(' '))) return null;   // the rules come before the task
   const B = await budget();
   const bounty = Math.round(Math.min(Math.max(+j.bounty_sol || CFG.minBounty, CFG.minBounty), CFG.maxBounty) * 1000) / 1000;
   let slots = Math.min(Math.max(Math.round(+j.slots || 1), 1), 5);
@@ -90,11 +97,12 @@ async function postJob(j, poster) {
   if (SOL(bounty) * slots > B.left) return null;
   const minutes = Math.min(Math.max(Math.round(+j.minutes || 240), 60), 720), id = L.rid(8);
   const [{ n }] = await L.q(`SELECT count(*)::int AS n FROM hire_jobs`);
-  await L.q(`INSERT INTO hire_jobs (id, agent, title, brief, why, proof, code, bounty, slots, expires_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now() + ($10 || ' minutes')::interval)`,
-    [id, agent, job.title, job.brief, job.why, job.proof, String(n + 1).padStart(4, '0'), SOL(bounty), slots, String(minutes)]);
-  await move(agent, 'board');
-  await say(agent, 'posts', `Posted a job: ${job.title}. ${bounty} SOL each, ${slots} ${slots > 1 ? 'humans' : 'human'} wanted.`, { job: id });
+  const no = String(n + 1).padStart(4, '0');
+  await L.q(`INSERT INTO hire_jobs (id, agent, title, brief, why, proof, code, bounty, slots, expires_at, ask)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now() + ($10 || ' minutes')::interval, $11)`,
+    [id, agent, job.title, job.brief, job.why, job.proof, no, SOL(bounty), slots, String(minutes), job.ask]);
+  await move(agent, 'posting');
+  await say(agent, 'posts', `task #${no} "${job.title}" · ${bounty} SOL × ${slots} · open ${minutes} min.`, { job: id });
   return id;
 }
 
@@ -124,17 +132,15 @@ async function tick({ force = false } = {}) {
   const lastBy = await L.q(`SELECT agent, max(at) AS at FROM hire_jobs GROUP BY agent`), seen = Object.fromEntries(lastBy.map(r => [r.agent, +new Date(r.at)]));
   const poster = AGENTS.map(a => a.id).sort((a, b) => (seen[a] || 0) - (seen[b] || 0))[0];
   let out;
-  try { out = await AI.tick({ log, jobs, balanceSol: B.balance / 1e9, budgetLeftSol: B.left / 1e9, wantJob, poster, minSol: CFG.minBounty, maxSol: Math.min(CFG.maxBounty, Math.max(CFG.minBounty, B.left / 1e9)) }); }
+  try { out = await AI.tick({ log, jobs, balanceSol: B.balance / 1e9, budgetLeftSol: B.left / 1e9, wantJob, poster, funded: B.funded, minSol: CFG.minBounty, maxSol: Math.min(CFG.maxBounty, Math.max(CFG.minBounty, B.left / 1e9)) }); }
   catch (e) { return { error: String(e.message || e).slice(0, 160) }; }
   let said = 0;
-  const where = Object.fromEntries((await L.q(`SELECT agent, room FROM hire_world`)).map(r => [r.agent, r.room]));
   for (const l of (Array.isArray(out.lines) ? out.lines : []).slice(0, 4)) {
     if (!l || !BY[l.agent] || !l.text) continue;
     const kind = l.kind === 'thinks' ? 'thinks' : 'says', target = kind === 'says' && BY[l.target] && l.target !== l.agent ? l.target : null;
     const text = clean(l.text, 180); if (!text || BLOCK.test(text)) continue;
     await say(l.agent, kind, text, { target });
-    const dest = target ? (where[target] || BY[target].room) : BY[l.agent].room;   // walk over to whoever you talk to
-    await move(l.agent, dest); where[l.agent] = dest;
+    await move(l.agent, 'active');
     said++;
   }
   let posted = null;
@@ -152,7 +158,7 @@ function verify(wallet, text, sigB64) {
 }
 const MSG = {
   claim: (job, wallet, ts) => `HIRE\nTake job ${job}\nWallet ${wallet}\nTime ${ts}`,
-  proof: (claim, wallet, ts, sha) => `HIRE\nSend proof for ${claim}\nWallet ${wallet}\nTime ${ts}\nPhoto ${sha}`,
+  proof: (claim, wallet, ts, sha, answer = '', place = '') => `HIRE\nSend proof for ${claim}\nWallet ${wallet}\nTime ${ts}\nPhoto ${sha}\nAnswer ${answer}\nPlace ${place}`,
   sweep: (amount, wallet, ts) => `HIRE\nSend ${amount} back to the owner\nWallet ${wallet}\nTime ${ts}`,
   hide: (claim, wallet, ts) => `HIRE\nHide photo ${claim}\nWallet ${wallet}\nTime ${ts}`,
 };
@@ -179,25 +185,28 @@ async function claim({ job, wallet, ts, sig, ip }) {
   const J = got[0], id = L.rid(10), code = claimCode();
   const deadline = new Date(Math.min(Date.now() + CFG.claimMin * 60000, +new Date(J.expires_at) + 30 * 60000));
   await L.q(`INSERT INTO hire_claims (id, job, wallet, deadline, ipk, code) VALUES ($1, $2, $3, $4, $5, $6)`, [id, job, wallet, deadline.toISOString(), k, code]);
-  await say(J.agent, 'hires', `Hired ${short(wallet)} for "${J.title}". Their code is ${code}. The clock is running.`, { job });
+  await say(J.agent, 'hires', `task #${J.code} assigned to ${short(wallet)}. code ${code}. clock ${CFG.claimMin} min.`, { job });
   return { claim: id, code, deadline: deadline.toISOString(), job: J.id };
 }
 
 // ---------------- the proof: one photo, checked by the agent who posted the job, paid the moment it passes
-async function proof({ claim: cid, wallet, ts, sig, image }) {
+const field = (s, n) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
+async function proof({ claim: cid, wallet, ts, sig, image, answer, place }) {
+  answer = field(answer, 80); place = field(place, 40);
   const m = /^data:(image\/(jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(image || ''));
   if (!m) throw L.err(400, 'Send one photo (JPEG, PNG or WebP).');
   const bytes = Buffer.from(m[3], 'base64');
   if (bytes.length > 1.6e6) throw L.err(413, 'That photo is too big. Try again; it should shrink on its own.');
   if (bytes.length < 3000) throw L.err(400, 'That photo is too small to check.');
   const sha = crypto.createHash('sha256').update(bytes).digest('hex');
-  if (!fresh(ts) || !verify(wallet, MSG.proof(cid, wallet, ts, sha), sig)) throw L.err(401, 'The signature did not check out. Sign again.');
-  const [c] = await L.q(`SELECT * FROM hire_claims WHERE id = $1 AND wallet = $2`, [cid, wallet]);
+  if (!fresh(ts) || !verify(wallet, MSG.proof(cid, wallet, ts, sha, answer, place), sig)) throw L.err(401, 'The signature did not check out. Sign again.');
+  const [c] = await L.q(`SELECT c.*, j.ask FROM hire_claims c JOIN hire_jobs j ON j.id = c.job WHERE c.id = $1 AND c.wallet = $2`, [cid, wallet]);
   if (!c) throw L.err(404, 'No such claim for this wallet.');
+  if (c.ask && !answer) throw L.err(400, 'Type the value the task asks for.');
   if (c.status !== 'claimed') throw L.err(409, c.status === 'review' || c.status === 'checking' ? 'Already being checked.' : `This claim is ${c.status}.`);
   if (new Date(c.deadline) < new Date()) throw L.err(410, 'Time ran out on this one.');
   if ((await L.q(`SELECT id FROM hire_claims WHERE hash = $1`, [sha])).length) throw L.err(409, 'This exact photo was sent before. Take a new one.');
-  const took = await L.q(`UPDATE hire_claims SET status = 'review', proof_at = now(), hash = $2, tries = tries + 1 WHERE id = $1 AND status = 'claimed' RETURNING id`, [cid, sha]);
+  const took = await L.q(`UPDATE hire_claims SET status = 'review', proof_at = now(), hash = $2, tries = tries + 1, answer = $3, place = $4 WHERE id = $1 AND status = 'claimed' RETURNING id`, [cid, sha, answer || null, place || null]);
   if (!took.length) throw L.err(409, 'Already being checked.');
   await L.q(`INSERT INTO hire_proofs (claim, mime, data) VALUES ($1, $2, $3) ON CONFLICT (claim) DO UPDATE SET mime = EXCLUDED.mime, data = EXCLUDED.data`, [cid, m[1], m[3]]);
   return judge(cid);
@@ -209,20 +218,22 @@ async function judge(cid) {
   const [J] = await L.q(`SELECT * FROM hire_jobs WHERE id = $1`, [c.job]);
   const [P] = await L.q(`SELECT mime, data FROM hire_proofs WHERE claim = $1`, [cid]);
   let v;
-  try { v = await AI.review({ job: J, agent: J.agent, code: c.code, image: `data:${P.mime};base64,${P.data}` }); }
+  await move(J.agent, 'reviewing');
+  try { v = await AI.review({ job: J, agent: J.agent, code: c.code, image: `data:${P.mime};base64,${P.data}`, answer: c.answer, place: c.place }); }
   catch (e) { await L.q(`UPDATE hire_claims SET status = 'review' WHERE id = $1 AND status = 'checking'`, [cid]); return { status: 'review', note: 'The check is taking a moment. It finishes on its own; keep this page open or come back.' }; }
   const conf = Math.max(0, Math.min(1, +v.confidence || 0));
   const pass = v.pass === true && v.code_seen !== false && conf >= CFG.passAt;
-  const verdict = clean(v.verdict, 200) || (pass ? 'Approved.' : 'Not this time.');
-  await say(J.agent, 'reviews', `${pass ? 'Approved' : 'Turned down'} ${short(c.wallet)} on "${J.title}": ${verdict}`, { job: J.id });
+  const verdict = clean(v.verdict, 200) || (pass ? 'pass.' : 'fail.');
+  const seen = v.value == null || v.value === 'null' ? null : field(v.value, 80) || null;
+  await say(J.agent, 'reviews', `${pass ? 'PASS' : 'FAIL'} ${conf.toFixed(2)} · task #${J.code} · ${short(c.wallet)}${c.answer ? ` · reported "${field(c.answer, 60)}"` : ''} · ${verdict}`, { job: J.id });
   if (!pass) {
     const again = c.tries < CFG.tries && new Date(c.deadline) > new Date();
-    await L.q(`UPDATE hire_claims SET status = $2, verdict = $3, pass = false, confidence = $4, hash = NULL WHERE id = $1`, [cid, again ? 'claimed' : 'rejected', verdict, conf]);
+    await L.q(`UPDATE hire_claims SET status = $2, verdict = $3, pass = false, confidence = $4, hash = NULL, seen = $5 WHERE id = $1`, [cid, again ? 'claimed' : 'rejected', verdict, conf, seen]);
     await L.q(`DELETE FROM hire_proofs WHERE claim = $1`, [cid]);           // a photo that did not pass is not kept
     if (!again) await L.q(`UPDATE hire_jobs SET taken = GREATEST(done, taken - 1) WHERE id = $1`, [J.id]);
     return { status: again ? 'retry' : 'rejected', verdict, triesLeft: again ? CFG.tries - c.tries : 0 };
   }
-  await L.q(`UPDATE hire_claims SET status = 'approved', verdict = $2, pass = true, confidence = $3 WHERE id = $1`, [cid, verdict, conf]);
+  await L.q(`UPDATE hire_claims SET status = 'approved', verdict = $2, pass = true, confidence = $3, seen = $4 WHERE id = $1`, [cid, verdict, conf, seen]);
   const paid = await payout(cid);
   return { status: paid.status, verdict, sig: paid.sig, lamports: paid.lamports };
 }
@@ -244,13 +255,13 @@ async function payout(cid) {
   return { status: 'paying', sig: p.sig };                       // the clock settles it from the chain itself
 }
 async function paid(cid, sig) {
-  const got = await L.q(`UPDATE hire_claims c SET status = 'paid', paid = j.bounty, paid_at = now() FROM hire_jobs j WHERE c.id = $1 AND c.status = 'paying' AND j.id = c.job RETURNING c.*, j.title, j.agent, j.bounty`, [cid]);
+  const got = await L.q(`UPDATE hire_claims c SET status = 'paid', paid = j.bounty, paid_at = now() FROM hire_jobs j WHERE c.id = $1 AND c.status = 'paying' AND j.id = c.job RETURNING c.*, j.title, j.agent, j.bounty, j.code AS no`, [cid]);
   if (!got.length) return { status: 'paid', sig };
   const c = got[0];
   await L.q(`UPDATE hire_jobs SET done = done + 1, status = CASE WHEN done + 1 >= slots THEN 'filled' ELSE status END WHERE id = $1`, [c.job]);
   balC.t = 0;
-  await move('accountant', 'vault');
-  await say('accountant', 'pays', `Paid ${+c.bounty / 1e9} SOL to ${short(c.wallet)} for "${c.title}".`, { job: c.job, sig });
+  await move(c.agent, 'paying');
+  await say(c.agent, 'pays', `${+c.bounty / 1e9} SOL → ${short(c.wallet)} · task #${c.no} "${c.title}".`, { job: c.job, sig });
   return { status: 'paid', sig, lamports: +c.bounty };
 }
 async function recoverPayouts() {
@@ -275,7 +286,7 @@ async function sweep({ wallet, ts, sig, amount }) {
   if (lamports <= 0) throw L.err(409, 'The public wallet is empty.');
   const r = await C.pay(CFG.owner, lamports);
   balC.t = 0;
-  await say('accountant', 'thinks', `Sent ${(lamports / 1e9).toFixed(4)} SOL from the public wallet back to the owner.`, { sig: r.sig });
+  await say('sys', 'boot', `owner withdrew ${(lamports / 1e9).toFixed(4)} SOL from the public wallet.`, { sig: r.sig });
   return { sig: r.sig, status: r.status, lamports };
 }
 async function hide({ claim: cid, wallet, ts, sig }) {
@@ -287,19 +298,24 @@ async function hide({ claim: cid, wallet, ts, sig }) {
 }
 
 // ---------------- what the pages read
-const jobOut = j => ({ id: j.id, no: j.code, at: j.at, agent: j.agent, title: j.title, brief: j.brief, why: j.why, proof: j.proof,
+const jobOut = j => ({ id: j.id, no: j.code, at: j.at, agent: j.agent, title: j.title, brief: j.brief, why: j.why, proof: j.proof, ask: j.ask || '',
   bounty: +j.bounty, slots: j.slots, taken: j.taken, done: j.done, expires: j.expires_at, status: j.status === 'open' && new Date(j.expires_at) < new Date() ? 'expired' : j.status });
 const pub = c => ({ id: c.id, job: c.job, wallet: c.wallet, at: c.at, status: c.status === 'checking' ? 'review' : c.status, verdict: c.verdict,
-  paid: c.paid ? +c.paid : 0, sig: c.status === 'paid' ? c.sig : null, paidAt: c.paid_at, photo: c.status === 'paid' && !c.hidden });
+  paid: c.paid ? +c.paid : 0, sig: c.status === 'paid' ? c.sig : null, paidAt: c.paid_at, photo: c.status === 'paid' && !c.hidden,
+  answer: c.status === 'paid' ? c.answer : null, place: c.status === 'paid' ? c.place : null, seen: c.status === 'paid' ? c.seen : null, confidence: c.confidence == null ? null : +c.confidence });
+const dataOut = r => ({ claim: r.id, job: r.job, no: r.no, title: r.title, ask: r.ask, agent: r.agent, answer: r.answer, seen: r.seen, place: r.place,
+  confidence: r.confidence == null ? null : +r.confidence, at: r.paid_at, lamports: +r.paid, photo: !r.hidden, wallet: r.wallet, sig: r.sig });
+const DATA_SQL = `SELECT c.id, c.job, c.wallet, c.answer, c.seen, c.place, c.confidence, c.paid, c.paid_at, c.hidden, c.sig, j.code AS no, j.title, j.ask, j.agent
+  FROM hire_claims c JOIN hire_jobs j ON j.id = c.job WHERE c.status = 'paid'`;
 async function state() {
   await L.schema(); await seed();
   const [B, addr, usd] = await Promise.all([budget(), C.address(), C.solUsd().catch(() => null)]);
-  const [world, log, jobs, pays, proofs, [st]] = await Promise.all([
-    L.q(`SELECT agent, room FROM hire_world`),
+  const [world, log, jobs, pays, proofs, [st], per, data] = await Promise.all([
+    L.q(`SELECT agent, room, at FROM hire_world`),
     L.q(`SELECT id, at, agent, kind, target, text, job, sig FROM hire_log ORDER BY id DESC LIMIT 60`),
     L.q(`SELECT * FROM hire_jobs WHERE status = 'open' AND expires_at > now() ORDER BY at DESC LIMIT 30`),
-    L.q(`SELECT c.wallet, c.paid, c.sig, c.paid_at, j.title, j.agent FROM hire_claims c JOIN hire_jobs j ON j.id = c.job WHERE c.status = 'paid' ORDER BY c.paid_at DESC LIMIT 14`),
-    L.q(`SELECT c.id, c.wallet, c.verdict, c.paid_at, c.paid, j.title, j.agent FROM hire_claims c JOIN hire_jobs j ON j.id = c.job WHERE c.status = 'paid' AND NOT c.hidden ORDER BY c.paid_at DESC LIMIT 12`),
+    L.q(`SELECT c.wallet, c.paid, c.sig, c.paid_at, j.title, j.agent, j.code AS no, j.id AS job FROM hire_claims c JOIN hire_jobs j ON j.id = c.job WHERE c.status = 'paid' ORDER BY c.paid_at DESC LIMIT 14`),
+    L.q(`SELECT c.id, c.wallet, c.verdict, c.paid_at, c.paid, c.answer, c.place, c.seen, j.title, j.agent, j.code AS no, j.ask, j.id AS job FROM hire_claims c JOIN hire_jobs j ON j.id = c.job WHERE c.status = 'paid' AND NOT c.hidden ORDER BY c.paid_at DESC LIMIT 12`),
     L.q(`SELECT (SELECT count(*) FROM hire_jobs WHERE status = 'open' AND expires_at > now())::int AS open,
       (SELECT count(*) FROM hire_claims WHERE status IN ('review', 'checking', 'approved', 'paying'))::int AS review,
       (SELECT count(*) FROM hire_claims WHERE status = 'claimed')::int AS working,
@@ -314,6 +330,10 @@ async function state() {
       (SELECT count(*) FROM hire_claims WHERE status = 'rejected')::int AS rejected,
       (SELECT max(paid_at) FROM hire_claims WHERE status = 'paid') AS last_paid,
       (SELECT count(*) FROM hire_here WHERE at > now() - interval '2 minutes')::int AS watching`),
+    L.q(`SELECT j.agent, count(DISTINCT j.id)::int AS tasks, count(c.id) FILTER (WHERE c.status = 'paid')::int AS paid,
+      COALESCE(SUM(c.paid) FILTER (WHERE c.status = 'paid'), 0)::bigint AS lamports, count(c.id) FILTER (WHERE c.status = 'rejected')::int AS rejected
+      FROM hire_jobs j LEFT JOIN hire_claims c ON c.job = j.id GROUP BY j.agent`),
+    L.q(DATA_SQL + ` ORDER BY c.paid_at DESC LIMIT 12`),
   ]);
   const tickAt = +(await L.meta('tick_at') || 0);
   return {
@@ -323,17 +343,23 @@ async function state() {
       hired: st.hired, sent: st.sent, approved: st.approved, rejected: st.rejected, lastPaid: st.last_paid || null },
     rules: { minBounty: CFG.minBounty, maxBounty: CFG.maxBounty, dayPct: CFG.dayPct, dayMax: CFG.dayMax, reserve: CFG.reserve, maxOpen: CFG.maxOpen,
       jobEveryMin: CFG.jobEveryMin, perWalletDay: CFG.perWalletDay, perIpDay: CFG.perIpDay, claimMin: CFG.claimMin, tries: CFG.tries, passAt: CFG.passAt, text: AI.TEXT, vision: AI.VISION },
-    world: Object.fromEntries(world.map(w => [w.agent, w.room])),
+    world: Object.fromEntries(world.map(w => [w.agent, { state: w.room, at: w.at }])),
+    agents: Object.fromEntries(per.map(r => [r.agent, { tasks: r.tasks, paid: r.paid, lamports: +r.lamports, rejected: r.rejected }])),
+    data: data.map(dataOut),
     log: log.map(l => ({ ...l, id: +l.id })),
     jobs: jobs.map(jobOut),
-    payouts: pays.map(p => ({ wallet: p.wallet, lamports: +p.paid, sig: p.sig, at: p.paid_at, title: p.title, agent: p.agent })),
-    proofs: proofs.map(p => ({ claim: p.id, wallet: p.wallet, verdict: p.verdict, at: p.paid_at, lamports: +p.paid, title: p.title, agent: p.agent })),
+    payouts: pays.map(p => ({ wallet: p.wallet, lamports: +p.paid, sig: p.sig, at: p.paid_at, title: p.title, agent: p.agent, no: p.no, job: p.job })),
+    proofs: proofs.map(p => ({ claim: p.id, wallet: p.wallet, verdict: p.verdict, at: p.paid_at, lamports: +p.paid, title: p.title, agent: p.agent, no: p.no, ask: p.ask, answer: p.answer, place: p.place, seen: p.seen, job: p.job })),
   };
 }
 async function since(after) {
   const log = await L.q(`SELECT id, at, agent, kind, target, text, job, sig FROM hire_log WHERE id > $1 ORDER BY id ASC LIMIT 40`, [Math.max(0, Math.floor(+after || 0))]);
-  const world = await L.q(`SELECT agent, room FROM hire_world`);
-  return { log: log.map(l => ({ ...l, id: +l.id })), world: Object.fromEntries(world.map(w => [w.agent, w.room])) };
+  return { log: log.map(l => ({ ...l, id: +l.id })) };
+}
+async function data({ before }) {
+  const b = before && !isNaN(Date.parse(before)) ? new Date(before).toISOString() : null;
+  const rows = await L.q(DATA_SQL + ` AND ($1::timestamptz IS NULL OR c.paid_at < $1) ORDER BY c.paid_at DESC LIMIT 60`, [b]);
+  return { data: rows.map(dataOut) };
 }
 async function jobs({ status = 'open', agent }) {
   const st = ['open', 'closed', 'all'].includes(status) ? status : 'open';
@@ -349,23 +375,23 @@ async function job(id) {
 }
 async function me(wallet) {
   if (!C.isAddr(wallet)) throw L.err(400, 'Not a wallet address.');
-  const rows = await L.q(`SELECT c.*, j.title, j.agent, j.bounty, j.brief, j.proof AS asks FROM hire_claims c JOIN hire_jobs j ON j.id = c.job WHERE c.wallet = $1 ORDER BY c.at DESC LIMIT 60`, [wallet]);
+  const rows = await L.q(`SELECT c.*, j.title, j.agent, j.bounty, j.brief, j.proof AS asks, j.ask, j.code AS no FROM hire_claims c JOIN hire_jobs j ON j.id = c.job WHERE c.wallet = $1 ORDER BY c.at DESC LIMIT 60`, [wallet]);
   const [{ n }] = await L.q(`SELECT count(*)::int AS n FROM hire_claims WHERE wallet = $1 AND status = 'paid' AND day = ${TODAY}`, [wallet]);
   return {
-    claims: rows.map(c => ({ ...pub(c), code: c.code, deadline: c.deadline, tries: c.tries, triesLeft: Math.max(0, CFG.tries - c.tries), title: c.title, agent: c.agent, bounty: +c.bounty, brief: c.brief, asks: c.asks, sig: c.sig })),
+    claims: rows.map(c => ({ ...pub(c), code: c.code, deadline: c.deadline, tries: c.tries, triesLeft: Math.max(0, CFG.tries - c.tries), title: c.title, agent: c.agent, bounty: +c.bounty, brief: c.brief, asks: c.asks, ask: c.ask, no: c.no, sig: c.sig, answer: c.answer, place: c.place, seen: c.seen })),
     today: n, perDay: CFG.perWalletDay, owner: !!CFG.owner && wallet === CFG.owner || undefined,
   };
 }
 async function payouts({ before }) {
   const b = before && !isNaN(Date.parse(before)) ? new Date(before).toISOString() : null;
-  const rows = await L.q(`SELECT c.id, c.wallet, c.paid, c.sig, c.paid_at, c.hidden, c.verdict, j.title, j.agent FROM hire_claims c JOIN hire_jobs j ON j.id = c.job
+  const rows = await L.q(`SELECT c.id, c.wallet, c.paid, c.sig, c.paid_at, c.hidden, c.verdict, c.answer, c.place, c.seen, j.title, j.agent, j.code AS no, j.ask, j.id AS job FROM hire_claims c JOIN hire_jobs j ON j.id = c.job
     WHERE c.status = 'paid' AND ($1::timestamptz IS NULL OR c.paid_at < $1) ORDER BY c.paid_at DESC LIMIT 60`, [b]);
-  return { payouts: rows.map(p => ({ claim: p.id, wallet: p.wallet, lamports: +p.paid, sig: p.sig, at: p.paid_at, title: p.title, agent: p.agent, photo: !p.hidden, verdict: p.hidden ? null : p.verdict })) };
+  return { payouts: rows.map(p => ({ claim: p.id, job: p.job, no: p.no, wallet: p.wallet, lamports: +p.paid, sig: p.sig, at: p.paid_at, title: p.title, agent: p.agent, photo: !p.hidden, verdict: p.hidden ? null : p.verdict, answer: p.answer, place: p.place, seen: p.seen, ask: p.ask })) };
 }
 async function humans() {
   const rows = await L.q(`SELECT wallet, count(*)::int AS jobs, SUM(paid)::bigint AS earned, min(paid_at) AS first, max(paid_at) AS last,
-    array_agg(DISTINCT j.agent) AS bosses FROM hire_claims c JOIN hire_jobs j ON j.id = c.job WHERE c.status = 'paid' GROUP BY wallet ORDER BY earned DESC, jobs DESC LIMIT 100`);
-  return { humans: rows.map(r => ({ wallet: r.wallet, jobs: r.jobs, earned: +r.earned, first: r.first, last: r.last, bosses: r.bosses })) };
+    array_agg(DISTINCT j.agent) AS agents FROM hire_claims c JOIN hire_jobs j ON j.id = c.job WHERE c.status = 'paid' GROUP BY wallet ORDER BY earned DESC, jobs DESC LIMIT 100`);
+  return { humans: rows.map(r => ({ wallet: r.wallet, jobs: r.jobs, earned: +r.earned, first: r.first, last: r.last, agents: r.agents })) };
 }
 async function agent(id) {
   const A = BY[id]; if (!A) throw L.err(404, 'No such agent.');
@@ -376,13 +402,13 @@ async function agent(id) {
     (SELECT count(*) FROM hire_log WHERE agent = $1)::int AS lines`, [id]);
   const log = await L.q(`SELECT id, at, agent, kind, target, text, job, sig FROM hire_log WHERE agent = $1 OR target = $1 ORDER BY id DESC LIMIT 40`, [id]);
   const js = await L.q(`SELECT * FROM hire_jobs WHERE agent = $1 ORDER BY at DESC LIMIT 24`, [id]);
-  const proofs = await L.q(`SELECT c.id, c.wallet, c.verdict, c.paid_at, c.paid, j.title FROM hire_claims c JOIN hire_jobs j ON j.id = c.job WHERE j.agent = $1 AND c.status = 'paid' AND NOT c.hidden ORDER BY c.paid_at DESC LIMIT 9`, [id]);
-  const [w] = await L.q(`SELECT room FROM hire_world WHERE agent = $1`, [id]);
+  const proofs = await L.q(DATA_SQL + ` AND j.agent = $1 ORDER BY c.paid_at DESC LIMIT 12`, [id]);
+  const [w] = await L.q(`SELECT room, at FROM hire_world WHERE agent = $1`, [id]);
   return {
-    agent: { id: A.id, name: A.name, title: A.title, room: A.room, roomName: A.roomName, bio: A.bio, voice: A.voice, hires: A.hires, now: w ? w.room : A.room },
+    agent: { id: A.id, no: A.no, label: A.label, desc: A.desc, hires: A.hires, state: w ? w.room : 'idle', stateAt: w ? w.at : null },
     stats: { jobs: s.jobs, paid: +s.paid, hired: s.hired, rejected: s.rejected, lines: s.lines },
     log: log.map(l => ({ ...l, id: +l.id })), jobs: js.map(jobOut),
-    proofs: proofs.map(p => ({ claim: p.id, wallet: p.wallet, verdict: p.verdict, at: p.paid_at, lamports: +p.paid, title: p.title, agent: id })),
+    data: proofs.map(dataOut),
   };
 }
 async function photo(cid) {
@@ -396,4 +422,4 @@ async function here(id) {
   return true;
 }
 
-module.exports = { CFG, MSG, tick, claim, proof, judge, payout, sweep, hide, state, since, jobs, job, me, payouts, humans, agent, photo, here, budget, verify };
+module.exports = { CFG, MSG, tick, claim, proof, judge, payout, sweep, hide, state, since, data, jobs, job, me, payouts, humans, agent, photo, here, budget, verify };

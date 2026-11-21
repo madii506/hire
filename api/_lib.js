@@ -75,6 +75,11 @@ function schema() {
     await q(`CREATE TABLE IF NOT EXISTS hire_world (agent text PRIMARY KEY, room text NOT NULL, mood int NOT NULL DEFAULT 0, at timestamptz NOT NULL DEFAULT now())`);
     // presence: a random id per open tab, for "N watching" and to rest the agents when nobody is
     await q(`CREATE TABLE IF NOT EXISTS hire_here (id text PRIMARY KEY, at timestamptz NOT NULL DEFAULT now())`);
+    // v3: every task asks for one value; the human reports it (and, if they like, where), the reviewer reads it off the photo
+    await q(`ALTER TABLE hire_jobs ADD COLUMN IF NOT EXISTS ask text`);
+    await q(`ALTER TABLE hire_claims ADD COLUMN IF NOT EXISTS answer text`);
+    await q(`ALTER TABLE hire_claims ADD COLUMN IF NOT EXISTS place text`);
+    await q(`ALTER TABLE hire_claims ADD COLUMN IF NOT EXISTS seen text`);
   })().catch(e => { schemaP = null; throw e; });
   return schemaP;
 }

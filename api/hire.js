@@ -28,6 +28,7 @@ module.exports = async (req, res) => {
         case 'payouts': return ok(res, await W.payouts({ before: qy.before }), L.CACHE(8, 24));
         case 'humans': return ok(res, await W.humans(), L.CACHE(15, 45));
         case 'agent': return ok(res, await W.agent(qy.id), L.CACHE(5, 15));
+        case 'data': return ok(res, await W.data({ before: qy.before }), L.CACHE(8, 24));
         case 'photo': {
           const p = await W.photo(qy.c);
           if (!p) return L.send(res, 404, { error: 'No such photo.' }, 'public, max-age=60');
@@ -73,7 +74,7 @@ module.exports = async (req, res) => {
         case 'proof': {
           if (L.limited('proof:' + ip, 6, 60000)) return L.send(res, 429, { error: 'Slow down a little.' });
           if (!reqOk(b.claim) || !reqOk(b.wallet)) return L.send(res, 400, { error: 'Missing the claim or the wallet.' });
-          return ok(res, await W.proof({ claim: b.claim, wallet: b.wallet, ts: b.ts, sig: b.sig, image: b.image }), 'no-store');
+          return ok(res, await W.proof({ claim: b.claim, wallet: b.wallet, ts: b.ts, sig: b.sig, image: b.image, answer: b.answer, place: b.place }), 'no-store');
         }
         case 'sweep': {
           if (L.limited('sweep:' + ip, 4, 60000)) return L.send(res, 429, { error: 'Slow down a little.' });
