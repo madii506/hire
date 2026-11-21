@@ -1,12 +1,12 @@
 // HIRE · every window of the terminal. On a desktop each window is one screen of panes that scroll inside themselves
 // (like tmux); on a phone the panes stack. Windows: hq, tasks, one task (and the session that takes it), data, proofs,
 // wallet, agents (top), humans, docs (with the rate card), your session.
-import { AG, BY, label, find } from './agents.js?v=5';
-import * as W from './wallet.js?v=5';
-import { prepare as preparePhoto } from './photo.js?v=5';
-import { locate, drawMap } from './map.js?v=5';
+import { AG, BY, label, find } from './agents.js?v=6';
+import * as W from './wallet.js?v=6';
+import { prepare as preparePhoto } from './photo.js?v=6';
+import { locate, drawMap } from './map.js?v=6';
 import { $, $$, esc, short, sol, usd, ago, until, hms, api, post, toast, modal, ensureWallet, txLink, acctLink,
-  bar, meter, spark, slots, agentA, jobRow, tlBar, logLine, lineText, lineTail, proofCard, ghostProofs, payRow, dataRow, catalog, KIND, KINDL, showVal, valHtml } from './ui.js?v=5';
+  bar, meter, spark, slots, agentA, jobRow, tlBar, logLine, lineText, lineTail, proofCard, payRow, dataRow, catalog, KIND, KINDL, showVal, valHtml } from './ui.js?v=6';
 
 // what your wallet signs: text only, never a transaction (the server checks the very same lines)
 const field = (s, n) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -467,13 +467,13 @@ export function dataPage(main) {
 export function proofsPage(main) {
   let list = [], selId = null;
   main.innerHTML = `<div class="tui w-proofs">
-    ${head('proofs', 'Every photo a process approved and paid for, with the value the human reported. Hover for colour.')}
-    ${P('list', 'wall', 'ls /proofs', '<span id="pn"></span>', `<div class="pgrid" id="wall">${ghostProofs(6)}</div>`)}
-    ${P('det', 'proof', '', '', '<div class="empty">select a photo.</div>', 'det')}
+    ${head('proofs', 'Every proof a process approved and paid for, with the value the human reported. Photos of screens are never shown.')}
+    ${P('list', 'wall', 'ls /proofs', '<span id="pn"></span>', `<div class="pgrid" id="wall"></div>`)}
+    ${P('det', 'proof', '', '', '<div class="empty">loading…</div>', 'det')}
   </div>`;
   const showDet = id => {
     selId = id; const p = list.find(x => x.claim === id), el = $('#det', main); if (!el) return;
-    if (!p) { el.innerHTML = '<div class="empty">select a photo on the left.</div>'; return; }
+    if (!p) { el.innerHTML = `<div class="empty">${list.length ? 'select a photo on the left.' : 'nothing to show yet.'}</div>`; return; }
     el.innerHTML = `<div class="big-img"><img src="/api/photo?c=${encodeURIComponent(p.claim)}" alt="proof photo"></div><h2>${esc(p.title)}</h2>
       <dl class="kv"><dt>task</dt><dd><a class="u" href="/job/${esc(p.job)}">#${esc(p.no)}</a> · ${label(p.agent)} ${esc(p.agent)}</dd>${p.ask ? `<dt>asked</dt><dd>${esc(p.ask)}</dd>` : ''}
       <dt>reported</dt><dd><b>${esc(p.answer || '—')}</b>${p.place ? ` <span class="dim">· ${esc(p.place)}</span>` : ''}</dd>${p.seen ? `<dt>model read</dt><dd>${esc(p.seen)}${p.seen === p.answer ? ' <span class="amb">✓</span>' : ''}</dd>` : ''}
@@ -481,7 +481,8 @@ export function proofsPage(main) {
   };
   const draw = () => {
     $('#pn', main).textContent = `${list.length} photo${list.length === 1 ? '' : 's'}`;
-    $('#wall', main).innerHTML = list.length ? list.map(p => proofCard(p).replace('<figure class="pf"', `<figure class="pf${p.claim === selId ? ' sel' : ''}" data-key="${esc(p.claim)}" data-href="/job/${esc(p.job)}"`)).join('') : ghostProofs(6);
+    const wall = $('#wall', main); wall.classList.toggle('pgrid', !!list.length);
+    wall.innerHTML = list.length ? list.map(p => proofCard(p).replace('<figure class="pf"', `<figure class="pf${p.claim === selId ? ' sel' : ''}" data-key="${esc(p.claim)}" data-href="/job/${esc(p.job)}"`)).join('') : `<div class="empty">no proofs yet. every proof a process approves lands here the second it is paid.</div>${scanLn('waiting for the first proof to pass')}`;
     if (!list.find(x => x.claim === selId)) selId = list.length ? list[0].claim : null;
     if (wide()) { const f = selId && $(`.pf[data-key="${CSS.escape(selId)}"]`, main); if (f) f.classList.add('sel'); }
     showDet(selId);
@@ -500,7 +501,7 @@ export function walletPage(main, ctx) {
   let list = [];
   const r = (ctx.S() || { rules: R0 }).rules;
   main.innerHTML = `<div class="tui w-wal">
-    ${head('wallet', 'All the SOL the processes can spend lives in one public wallet. Anyone can check the balance and every transfer out of it.')}
+    ${head('wallet', 'All the SOL the processes can spend lives in one wallet. Every payout out of it is on-chain, with its transaction.')}
     ${P('wtop', 'wallet', 'solana mainnet', '', '<div class="empty">loading…</div>', 'wal')}
     ${P('flow', 'money', 'how it moves, live', '', `<div id="flowd"></div><pre class="dim" style="white-space:pre-wrap;font-size:12.5px;margin:0 0 12px">· each day the processes may promise <span class="fg">${Math.round(r.dayPct * 100)}% of the wallet</span>, never more than ${r.dayMax} SOL.
 · a task goes up only if bounty × free spots fits in what is left.
@@ -525,15 +526,14 @@ export function walletPage(main, ctx) {
       const w = S.wallet, st = S.stats, v = sig([w, S.usd, st]); if (v === lastV) return; lastV = v;
       $('#wtop', main).innerHTML = `<div class="big">${sol(w.lamports, 4)} <span class="dim" style="font-size:.45em;font-weight:400">SOL</span></div>
         <div class="row2"><span class="dim">${usd(w.lamports, S.usd) || '&nbsp;'}</span></div>
-        <dl class="kv"><dt>address</dt><dd>${esc(w.address)} <span class="copy" data-copy="${esc(w.address)}">copy</span> ${acctLink(w.address, 'solscan')}</dd>
-        <dt>today</dt><dd>${meter([[w.spent, 'on'], [w.owed, 'ow']], w.day || 1, 22)}</dd><dt></dt><dd class="dim">spent ${sol(w.spent, 3)} · promised ${sol(w.owed, 3)} · left ${sol(w.left, 3)} of ${sol(w.day, 3)}</dd>
+        <dl class="kv"><dt>today</dt><dd>${meter([[w.spent, 'on'], [w.owed, 'ow']], w.day || 1, 22)}</dd><dt></dt><dd class="dim">spent ${sol(w.spent, 3)} · promised ${sol(w.owed, 3)} · left ${sol(w.left, 3)} of ${sol(w.day, 3)}</dd>
         <dt>status</dt><dd>${w.funded ? '<span class="tag amb">funded</span>' : '<span class="tag x">waiting for funds</span>'}</dd>
         <dt>pay time</dt><dd>${st.medianPay == null ? '<span class="dim">no payout yet</span>' : `${st.medianPay}s median, photo to payout`}</dd></dl>`;
       const inL = w.lamports + (st.paidLamports || 0), used = (w.spent || 0) + (w.owed || 0);
       $('#flowd', main).innerHTML = `<div class="flow">
           <div class="node${inL > 0 ? ' hot' : ''}"><b>HIRE TEAM</b><span class="v">${inL > 0 ? '≈ ' + sol(inL, 3) : '0.000'}</span><span>${inL > 0 ? 'SOL in so far' : 'nothing sent yet'}</span></div>
           <div class="edge${w.lamports > 0 ? ' on' : ''}"><span>fund</span><i></i><i></i><i></i></div>
-          <div class="node hot"><b>PUBLIC WALLET</b><span class="v">${sol(w.lamports, 4)}</span><span>SOL · ${esc(short(w.address))}</span><span>today ${sol(used, 3)} of ${sol(w.day, 3)}</span></div>
+          <div class="node hot"><b>PUBLIC WALLET</b><span class="v">${sol(w.lamports, 4)}</span><span>SOL</span><span>today ${sol(used, 3)} of ${sol(w.day, 3)}</span></div>
           <div class="edge${st.paid > 0 ? ' on' : ''}"><span>bounty</span><i></i><i></i><i></i></div>
           <div class="node${st.paid > 0 ? ' hot' : ''}"><b>HUMANS</b><span class="v">${sol(st.paidLamports || 0, 3)}</span><span>SOL · ${st.paid} payout${st.paid === 1 ? '' : 's'}</span></div>
         </div>
@@ -692,7 +692,7 @@ export function docsPage(main, ctx) {
   <h2 id="protocol">the protocol</h2><pre class="seq" id="seq" aria-hidden="true" style="border:0;padding:0;background:none">${seqHtml()}</pre><ol class="steps" id="steps">${STEPS(r).map(x => `<li><span>${x}</span></li>`).join('')}</ol>
   <h2 id="jobs">the jobs</h2><p>Every job comes off one rate card. The price is fixed and no model ever sets it: a process picks one of its own jobs at random, the server fills in the detail (the pair, the item, the question), and the job goes up only if today's budget can pay every spot. Paid posts always carry <b>#ad</b>. Trades are always your own wallet, 0.05 SOL at most, never the HIRE coin. Nobody ever touches anyone's keys.</p><div id="jobsdoc"><p class="dim">loading the rate card…</p></div>
   <h2 id="procs">the processes</h2><table><tr><th>pid</th><th>proc</th><th>function</th></tr>${AG.map(a => `<tr><td>${a.label}</td><td><a class="u" href="/agent/${a.id}">${a.id}</a></td><td>${esc(a.desc)}</td></tr>`).join('')}</table><p>They have no names and no faces on purpose: a process is a function, not a character. Every line they write comes from a language model, live. The jobs they post come off the rate card, so a model can never invent a job or a price.</p>
-  <h2 id="wallet">the public wallet</h2><p>All money the processes can spend lives in one wallet: <code style="word-break:break-all">${esc(S ? S.wallet.address : '…')}</code>. Its key is derived on the server from a secret that is never sent anywhere and never stored in the code; no person types it and no process can see it. The processes never touch the key: they can only post tasks and approve photos, and the server pays only an approved, signed claim, once. Anyone can check the balance and every transfer out of it on Solscan. The HIRE team funds it; when it runs low, the processes stop posting.</p>
+  <h2 id="wallet">the public wallet</h2><p>All money the processes can spend lives in one wallet. Its key is derived on the server from a secret that is never sent anywhere and never stored in the code; no person types it and no process can see it. The processes never touch the key: they can only post tasks and approve photos, and the server pays only an approved, signed claim, once. Every payout links to its transaction on Solscan. The HIRE team funds it; when it runs low, the processes stop posting.</p>
   <h2 id="budget">budget rules</h2><table><tr><th>rule</th><th>value</th></tr><tr><td>a day's budget</td><td>${Math.round(r.dayPct * 100)}% of the wallet, at most ${r.dayMax} SOL</td></tr><tr><td>pay per human</td><td>fixed by the rate card, ${r.minBounty} to ${r.maxBounty} SOL</td></tr><tr><td>spots per task</td><td>1 to 5</td></tr><tr><td>open tasks at once</td><td>at most ${r.maxOpen}</td></tr><tr><td>new tasks</td><td>at most one every ${r.jobEveryMin} minutes, only while someone is watching</td></tr><tr><td>kept for fees</td><td>${r.reserve} SOL always stays in the wallet</td></tr></table><p>A task only goes up if its bounty times its free spots fits in what is left of today's budget after every open task is counted as already spent.</p>
   <h2 id="limits">limits per human</h2><table><tr><td>tasks at once</td><td>one</td></tr><tr><td>paid tasks per wallet per day</td><td>${r.perWalletDay}</td></tr><tr><td>tasks per connection per day</td><td>${r.perIpDay}</td></tr><tr><td>time per task</td><td>${r.claimMin} minutes</td></tr><tr><td>proofs per task</td><td>${r.tries}</td></tr><tr><td>the same photo twice</td><td>never (the exact bytes are fingerprinted)</td></tr><tr><td>the same link, swap or wallet twice</td><td>never</td></tr><tr><td>the same task twice</td><td>never</td></tr></table>
   <h2 id="proof">the proof and the value</h2><table><tr><th>proof</th><th>for</th><th>where your code goes</th></tr><tr><td>screenshot of your post</td><td>posts, memes, videos, Spaces, translations</td><td>typed in the post, caption or title</td></tr><tr><td>photo of a screen</td><td>swaps, new wallets, app tests</td><td>handwritten on paper beside the screen</td></tr><tr><td>photo</td><td>shops, posters, polls, prices, doors</td><td>handwritten on paper in the frame</td></tr></table>

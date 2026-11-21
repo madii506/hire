@@ -1,6 +1,6 @@
 // HIRE · the dot map: a land mask drawn as cells, and a pin for every verified value whose place a human typed.
 // Places are matched against a small built-in list of cities and countries; anything unknown is listed, never guessed.
-import { LAND } from './land.js?v=5';
+import { LAND } from './land.js?v=6';
 
 const C = [
   // europe

@@ -1,6 +1,6 @@
 // HIRE · shared pieces: the API, formatting, the wallet picker, toasts, and the rows every screen prints.
-import { BY, label } from './agents.js?v=5';
-import * as W from './wallet.js?v=5';
+import { BY, label } from './agents.js?v=6';
+import * as W from './wallet.js?v=6';
 
 // set these once the coin is live (left empty, nothing about a token is shown anywhere)
 export const CONFIG = { ca: '', x: '' };
