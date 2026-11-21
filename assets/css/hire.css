@@ -357,6 +357,148 @@ a.ext:hover::after{color:var(--amb)}
 body.intro-on{overflow:hidden}
 body.intro-on .logo,body.intro-on .tape .tr{animation-play-state:paused}
 
+
+/* ------------------------------------------------------------------ the TUI: every window is one screen of panes */
+body.tui-on{overflow:hidden}
+.tui{display:grid;gap:8px;padding:8px var(--pad);height:calc(100vh - var(--top) - var(--bot));height:calc(100dvh - var(--top) - var(--bot));min-height:0;overflow:hidden}
+.tui>*{min-width:0;min-height:0}
+.tui .pane .pb{overflow:auto;min-height:0}
+.tui .pane .pb.flush{padding:0}
+.pane{outline:0}
+.pane.focus{border-color:var(--amb)}
+.pane.focus>.ph{border-bottom-color:var(--amb2)}
+.pane.focus>.ph b{background:var(--amb)}
+.ph .sub{overflow:hidden;text-overflow:ellipsis}
+.ph .tabs2{display:flex;gap:0;margin-left:4px}
+.ph .tabs2 button{background:none;border:0;border-left:1px solid var(--l2);color:var(--dim);padding:0 9px;height:31px;font-size:12px}
+.ph .tabs2 button.on{color:#000;background:var(--fg2)}
+.ph .tabs2 button:hover{color:var(--fg)}
+.ph .tabs2 button.on:hover{color:#000}
+.tt.cmp td{padding:5px 10px}
+.tt.cmp td.w{max-width:0}
+.tt.cmp td.w>b,.tt.cmp td.w>.s,.tt.cmp td.w{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tt.cmp td.w>b,.tt.cmp td.w>.s{display:block}
+.tt.cmp td.val{max-width:17ch;min-width:9ch}
+.tt.cmp td.val>b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tt.cmp th{padding:6px 10px 5px}
+.tt tr.sel td{background:#1a1a1a;box-shadow:inset 0 1px 0 var(--l3),inset 0 -1px 0 var(--l3)}
+.tt tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--amb),inset 0 1px 0 var(--l3),inset 0 -1px 0 var(--l3)}
+.kbdhint{color:var(--faint);font-size:11.5px}
+.kbdhint kbd{font:inherit;border:1px solid var(--l2);padding:0 4px;color:var(--dim)}
+
+/* hq */
+.w-hq{grid-template-columns:minmax(0,1.18fr) minmax(0,1fr) minmax(0,.96fr);grid-template-rows:auto 30px minmax(0,1fr) minmax(0,1fr);
+  grid-template-areas:"top top top" "tape tape tape" "tasks log ps" "data map wal"}
+.hqtop{grid-area:top;display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1.18fr);gap:clamp(18px,2.4vw,34px);align-items:center;border:1px solid var(--l2);padding:14px 18px}
+.hqtop .logo{width:clamp(190px,19vw,300px)}
+.hqtop .tagline{font-size:clamp(14px,1.28vw,18.5px);margin:0;min-height:4.3em;line-height:1.45}
+.hqtop .btns{margin-top:12px}
+.hqtop .btn{padding:7px 12px;font-size:12.5px}
+.hqstat{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 20px;align-items:end;min-width:0}
+.hqstat .bal{display:flex;flex-direction:column;gap:2px;min-width:0}
+.hqstat .bal .big{font-size:clamp(26px,2.5vw,38px)}
+.hqstat .bal span{font-size:11.5px}
+.hqstat .actg .bars{height:46px}
+.hqstat .kv{grid-column:1/-1;grid-template-columns:auto minmax(0,1fr) auto minmax(0,1fr);gap:4px 14px;font-size:12.5px;margin-top:8px}
+.hqstat .kv dd{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media (min-width:1100px) and (max-height:820px){
+  .hqtop{padding:10px 16px;gap:22px}
+  .hqtop .logo{width:clamp(160px,14vw,220px)}
+  .hqtop .tagline{font-size:14.5px;min-height:0;line-height:1.4}
+  .hqtop .btns{margin-top:8px}
+  .hqstat .actg .bars{height:30px}
+  .hqstat .actg .lab{display:none}
+  .hqstat .bal .big{font-size:28px}
+  .hqstat .kv{gap:2px 12px;font-size:12px;margin-top:4px}
+  .tui{gap:6px;padding-top:6px;padding-bottom:6px}
+}
+.w-hq .tape{grid-area:tape;margin:0;border:1px solid var(--l2)}
+#p-tasks{grid-area:tasks}#p-log{grid-area:log}#p-ps{grid-area:ps}#p-data{grid-area:data}#p-map{grid-area:map}#p-wal{grid-area:wal}
+.tui .logp .pb{height:auto}
+
+/* the map */
+.mapw{position:relative;height:100%;min-height:150px}
+.mapw canvas{position:absolute;inset:8px 10px 26px;width:calc(100% - 20px);height:calc(100% - 34px)}
+.mapw .cap{position:absolute;left:10px;right:10px;bottom:5px;display:flex;justify-content:space-between;gap:10px;font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden}
+.mapw .tip{position:absolute;pointer-events:none;background:#000;border:1px solid var(--amb);color:var(--fg);font-size:12px;padding:4px 8px;white-space:nowrap;transform:translate(-50%,-130%);z-index:2}
+
+/* tasks: list + preview */
+.w-list{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);grid-template-areas:"head head" "list det"}
+.whead{grid-area:head;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.whead .h1{margin:0;font-size:clamp(20px,2.2vw,28px)}
+.whead .lede{margin:2px 0 0;font-size:13px;max-width:70ch}
+.whead .filters{margin:0}
+#p-list{grid-area:list}#p-det{grid-area:det}
+.det .pb{padding:16px 18px}
+.det h2{font-size:clamp(18px,1.8vw,24px);line-height:1.2;margin:2px 0 14px;font-weight:800}
+.det .kv{font-size:13px;gap:8px 18px}
+.det .act{margin-top:16px}
+.det .empty{padding-top:4px}
+
+/* one task */
+.w-job{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,.62fr);grid-template-areas:"ticket sess" "claims sess"}
+#p-ticket{grid-area:ticket}#p-claims{grid-area:claims}#p-sess{grid-area:sess}
+.tui .ticket .pb{padding:16px 18px}
+.tui .sess{position:static}
+
+/* data */
+.w-data{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1.2fr) minmax(0,1fr);grid-template-areas:"head head" "tbl map" "tbl byp"}
+#p-tbl{grid-area:tbl}#p-byp{grid-area:byp}
+.w-data #p-map{grid-area:map}
+
+/* proofs */
+.w-proofs{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);grid-template-areas:"head head" "list det"}
+.tui .pgrid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.pf.sel{border-color:var(--amb)}
+.det .big-img{border:1px solid var(--l2);margin-bottom:14px;background:var(--bg2)}
+.det .big-img img{width:100%;max-height:46vh;object-fit:contain}
+
+/* wallet */
+.w-wal{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);grid-template-areas:"head head" "wtop flow" "ledger ledger"}
+#p-wtop{grid-area:wtop}#p-flow{grid-area:flow}#p-ledger{grid-area:ledger}
+
+/* agents */
+.w-ag{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);grid-template-areas:"head head" "list det"}
+.det .pid{font-size:clamp(40px,5vw,72px)}
+.det .sect{margin-top:18px;border-top:1px dashed var(--l2);padding-top:10px}
+.det .sect>.t{color:var(--faint);font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
+
+/* man */
+.w-man{grid-template-columns:230px minmax(0,1fr);grid-template-rows:minmax(0,1fr);grid-template-areas:"nav doc"}
+#p-nav{grid-area:nav}#p-doc{grid-area:doc}
+.mnav{display:flex;flex-direction:column;font-size:12.5px;padding:6px 0}
+.mnav a{padding:5px 14px;color:var(--dim);display:flex;gap:10px}
+.mnav a i{font-style:normal;color:var(--faint);width:2ch}
+.mnav a:hover,.mnav a.on{color:var(--fg);background:var(--bg2);box-shadow:inset 2px 0 0 var(--amb)}
+.tui article.docs{max-width:96ch;padding:4px 8px 40px;color:var(--fg2)}
+.tui article.docs h2:first-child{margin-top:4px;border-top:0;padding-top:0}
+.tui article.docs .steps{margin-top:12px}
+
+/* me, 404 */
+.w-me{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);grid-template-areas:"head head" "who now" "hist hist"}
+#p-who{grid-area:who}#p-now{grid-area:now}#p-hist{grid-area:hist}
+.w-one{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr)}
+
+/* the boot screen */
+.boot{position:fixed;inset:0;z-index:150;background:#000;padding:clamp(18px,4vw,48px);font-size:13px;line-height:1.6;overflow:hidden;cursor:pointer}
+.boot pre{white-space:pre-wrap;color:var(--fg2)}
+.boot pre .t{color:var(--faint)}
+.boot pre .ok{color:#000;background:var(--fg);padding:0 4px;font-weight:700}
+.boot pre .a{color:var(--amb)}
+.boot.out{animation:bootout .32s steps(4) forwards}
+@keyframes bootout{to{opacity:0;visibility:hidden}}
+
+/* help overlay */
+.keys-help{columns:2;column-gap:28px;font-size:13px}
+.keys-help div{break-inside:avoid;display:flex;gap:12px;padding:3px 0}
+.keys-help kbd{font:inherit;min-width:9ch;color:var(--amb)}
+
+/* the command line: ghost completion */
+.cmdwrap{position:relative;flex:1;min-width:0;display:flex;align-items:center;height:100%}
+.ghost{position:absolute;left:0;top:50%;transform:translateY(-50%);white-space:pre;color:var(--faint);pointer-events:none;font-size:14px;overflow:hidden;max-width:100%}
+.ghost i{font-style:normal;color:transparent}
+#cmd{position:relative;z-index:1;background:transparent}
+
 /* ------------------------------------------------------------------ smaller screens */
 @media (max-width:1180px){
   .tstat .hide-m{display:none}
@@ -400,4 +542,23 @@ body.intro-on .logo,body.intro-on .tape .tr{animation-play-state:paused}
   *,*::before,*::after{animation-duration:.001s!important;animation-iteration-count:1!important}
   .logo{clip-path:none!important}
   .tape .tr{animation:none}
+}
+
+@media (max-width:1099px),(max-height:620px){
+  body.tui-on{overflow:auto}
+  .tui{display:flex;flex-direction:column;height:auto;overflow:visible;gap:10px}
+  .tui>.pane{flex:none}
+  .tui .pane .pb{max-height:none}
+  .tui .pane.cap .pb{max-height:var(--mh,420px)}
+  .hqtop{grid-template-columns:1fr;gap:16px}
+  .hqtop .logo{width:min(100%,360px)}
+  .hqtop .tagline{font-size:16px;min-height:0}
+  .hqstat .kv{grid-template-columns:auto minmax(0,1fr)}
+  .mapw{height:240px}
+  .w-man .mnav{flex-direction:row;flex-wrap:wrap}
+  .det .big-img img{max-height:none}
+}
+@media (max-width:640px){
+  .ghost{font-size:16px}
+  .keys-help{columns:1}
 }
